@@ -7,6 +7,8 @@ import time
 import json
 import subprocess
 import argparse
+import tarfile
+import boto3
 
 AWS = 'aws'   # path to `aws` CLI executable
 
@@ -14,8 +16,7 @@ PERMISSION_FILE_PATH = '~/.ssh/dlad-aws.pem'
 AMI = 'ami-0b64362b8113b27fd' # Pre-setup AMI based on Deep Learning AMI (Ubuntu 18.04) Version 41.0 AMI 07f83f2fb8212ce3b
 REGION = 'us-east-2'
 NON_ROOT = 'ubuntu'
-TIMEOUT_TRAIN = 24  # in hours
-TIMEOUT_DEVEL = 4  # in hours
+TIMEOUT = {'train': 48, 'devel': 4}  # in hours
 RSYNC_EXCLUDE = "--exclude 'wandb/' --exclude 'doc/'"
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -68,27 +69,66 @@ def setup_wandb():
         with open("aws_configs/wandb.key", "w") as fh:
             fh.write(wandb_key)
 
+def code_archive_filter(x):
+    if 'wandb/' not in x.name and 'doc/' not in x.name and 'instance_state.txt' not in x.name and 'pycache' not in x.name and '.tar.gz' not in x.name:
+        return x
+    else:
+        return None
+
+def gen_code_archive(file):
+    with tarfile.open(file, mode='w:gz') as tar:
+        tar.add('.', filter=code_archive_filter)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="config")
     parser.add_argument(
-        "--mode", choices=["bare", "train", "devel"],
+        "--mode", choices=["train", "devel"],
         required=True,
         help="Mode of the instance setup.\n"
-             "Bare: Without code and setup\n"
              "Devel: With code and setup\n"
              "Train: With code, setup and automatic training"
     )
+    parser.add_argument(
+        "--instance", choices=["m5n.xlarge", "p2.xlarge", "p3.2xlarge"],
+        required=True,
+        help="Instance type: m5n.xlarge, p2.xlarge, or p3.2xlarge"
+    )
+    parser.add_argument(
+        "--on-demand", action='store_true',
+        help="Use a more expensive on-demand instance."
+    )
     args = parser.parse_args()
+    if args.mode == 'devel':
+        assert args.instance == 'm5n.xlarge', 'Please use an m5n.xlarge instance for development.'
 
     setup_wandb()
     setup_s3_bucket()
     setup_group_id()
 
-    print("Launch instance (Ctrl+C won't stop the process anymore)...")
-
     timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
     tag = f'{timestamp}'
+
+    # Generate and upload code tar.gz to AWS S3
+    print('Upload code to AWS S3...')
+    code_archive = f'code_{tag}.tar.gz'
+    gen_code_archive(code_archive)
+    s3 = boto3.client('s3')
+    with open('aws_configs/default_s3_bucket.txt', 'r') as fh:
+        S3_BUCKET_NAME = fh.read()
+    response = s3.upload_file(code_archive, S3_BUCKET_NAME,
+                              f'code/{code_archive}')
+    os.remove(code_archive)
+
+    # Create user_data.sh that will be executed when instance is starting for the first time
+    print(f'Set timeout to {TIMEOUT[args.mode]} hours.')
+    with open('aws_configs/user_data.sh', 'r') as fh:
+        user_data = fh.read().format(
+            bucket=S3_BUCKET_NAME,
+            code_archive=code_archive,
+            timeout=TIMEOUT[args.mode],
+            script=f'{args.mode}.sh'
+        )
 
     instance_tag = 'ResourceType=instance,Tags=[{Key=Name,Value=' + tag + '}]'
     spot_tag = 'ResourceType=spot-instances-request,Tags=[{Key=Name,Value=' + tag + '}]'
@@ -97,18 +137,33 @@ if __name__ == '__main__':
     # Refer to https://docs.aws.amazon.com/cli/latest/reference/ec2/run-instances.html
     my_cmd = [AWS, 'ec2', 'run-instances',
               '--tag-specifications', instance_tag,
-              '--tag-specifications', spot_tag,
-              '--instance-type', INSTANCE_TYPE_DEVEL if args.mode == "devel" else INSTANCE_TYPE_TRAIN,
+              '--instance-type', args.instance,
               '--image-id', AMI,
               '--key-name', 'dlad-aws',
               '--security-groups', 'dlad-sg',
               '--iam-instance-profile', 'Name="dlad-instance-profile"',
               '--ebs-optimized',
               '--block-device-mappings', f'DeviceName="/dev/sda1",Ebs={{VolumeSize=250}}',
-              '--instance-market-options', f'file://{TOOLS_DIR}/aws_configs/spot-options.json'
+              '--user-data', user_data,
     ]
 
+    # Spot options
+    if not args.on_demand:
+        # Managed spot train
+        if args.mode == 'train':
+            my_cmd.extend([
+                '--tag-specifications', spot_tag,
+                '--instance-market-options', f'file://{TOOLS_DIR}/aws_configs/persistent-spot-options.json',
+            ])
+        # One-time development spot instance (does not spawn again)
+        else:
+            my_cmd.extend([
+                '--tag-specifications', spot_tag,
+                '--instance-market-options', f'file://{TOOLS_DIR}/aws_configs/spot-options.json',
+            ])
 
+
+    print("Launch instance...")
     response = None
     successful = False
     while not successful:
@@ -131,41 +186,24 @@ if __name__ == '__main__':
                                                        instance_id]))
     instance_dns = dns_response['Reservations'][0]['Instances'][0]['PublicDnsName']
     ssh_command = build_ssh_cmd(instance_dns)
+    print('AWS instance was launched.')
 
-    print('Wait for instance and copy files to AWS...')
+    print('Wait for AWS instance to initialize...')
     successful = False
     while not successful:
         try:
-            rsync_cmd = build_rsync_cmd(instance_dns)
-            if not args.mode == "bare":
-                subprocess.run([rsync_cmd], shell=True, check=True)
+            subprocess.run([f"{ssh_command} echo 'SSH connection initialized'"], shell=True, check=True)
             successful = True
         except subprocess.CalledProcessError:
-            print(f'File transfer unsuccessfull, retrying...')
-
-    if args.mode == "devel":
-        print(f'\nSet timeout to {TIMEOUT_DEVEL} hours.\n')
-        subprocess.run(
-            [f"{ssh_command} nohup bash /home/ubuntu/code/aws/timeout.sh {TIMEOUT_DEVEL}h > aws/timeout.log 2>&1 &"],
-            shell=True, check=True)
-        print('Start devel tmux session...')
-        subprocess.run([f"{ssh_command} bash /home/ubuntu/code/aws/devel_in_tmux.sh"], shell=True, check=True)
-    if args.mode == "train":
-        print(f'\nSet timeout to {TIMEOUT_TRAIN} hours.\n')
-        subprocess.run(
-            [f"{ssh_command} nohup bash /home/ubuntu/code/aws/timeout.sh {TIMEOUT_TRAIN}h > aws/timeout.log 2>&1 &"],
-            shell=True, check=True)
-        print('Start training in tmux session...')
-        subprocess.run([f"{ssh_command} bash /home/ubuntu/code/aws/train_in_tmux.sh"], shell=True, check=True)
+            print(f'Wait for instance...')
 
     print(f'Sucessfully started instance {instance_id} with tag {tag}')
     print('Connect to instance using ssh:')
     print(color.GREEN + ssh_command + color.END)
     print('Rsync file updates:')
-    print(color.GREEN + rsync_cmd + color.END)
-    if not args.mode == "bare":
-        print('Connect to tmux session using ssh:')
-        print(color.GREEN + f"{ssh_command} -t tmux attach-session -t dlad" + color.END)
+    print(color.GREEN + build_rsync_cmd(instance_dns) + color.END)
+    print('Connect to tmux session using ssh:')
+    print(color.GREEN + f"{ssh_command} -t tmux attach-session -t dlad" + color.END)
 
     with open('aws/aws.log', 'a') as file_name:
         file_name.write(f'{tag}\n')

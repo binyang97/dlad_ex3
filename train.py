@@ -3,6 +3,7 @@
 # For further questions contact Ozan Unal, ozan.unal@vision.ee.ethz.ch
 
 import os
+import sys
 import argparse
 import uuid
 from datetime import datetime
@@ -12,6 +13,7 @@ import requests
 import yaml
 import numpy as np
 import shutil
+import wandb
 import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lrs
@@ -124,20 +126,9 @@ class LitModel(pl.LightningModule):
                           num_workers=os.cpu_count(),
                           collate_fn=self.test_dataset.collate_batch)
 
-if __name__=='__main__':
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--config_path', default='config.yaml')
-    args = parser.parse_args()
-
-    config = yaml.safe_load(open(args.config_path, 'r'))
-
-    with open('aws_configs/default_s3_bucket.txt', 'r') as fh:
-        S3_BUCKET_NAME = fh.read()
+def train(config, run_name, s3_log_path):
     with open('aws_configs/group_id.txt', 'r') as fh:
         GROUP_ID = int(fh.read())
-    timestamp = datetime.now().strftime('%m%d-%H%M')
-    run_name = f'G{GROUP_ID}_{timestamp}_{config["name"]}_{str(uuid.uuid4())[:5]}'
-    s3_log_path = f"s3://{S3_BUCKET_NAME}/{run_name}/"
 
     wandb_logger = WandbLogger(
         name=run_name,
@@ -204,3 +195,48 @@ if __name__=='__main__':
 
     ret_code = os.system(f"aws s3 cp {litModel.submission_file} {s3_log_path}")
     assert ret_code == 0
+    wandb.finish()
+
+def get_newest_ckpt(s3_path):
+    s3 = boto3.resource('s3')
+    _, _, resume_bucket_name, resume_bucket_local_path = s3_path.split('/', 3)
+    resume_bucket = s3.Bucket(resume_bucket_name)
+    checkpoints = list(
+        resume_bucket.objects.filter(Prefix=resume_bucket_local_path))
+    checkpoints = [c for c in checkpoints if c.key.endswith(".ckpt")]
+    if len(checkpoints) == 0:
+        return None
+    else:
+        checkpoints = sorted(checkpoints, key=lambda x: x.last_modified, reverse=True)
+        print(checkpoints)
+        return f"s3://{checkpoints[0].bucket_name}/{checkpoints[0].key}"
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument('--config_path', default='config.yaml')
+    args = parser.parse_args()
+    config = yaml.safe_load(open(args.config_path, 'r'))
+
+    if os.path.isfile('instance_state.txt'):
+        with open('instance_state.txt', 'r') as fh:
+            states = fh.readlines()
+        for s in reversed(states):
+            last_resume_ckpt = get_newest_ckpt(s)
+            if last_resume_ckpt is not None:
+                config['resume_from_checkpoint'] = last_resume_ckpt
+                print(f'Resume from {last_resume_ckpt}.')
+                break
+            else:
+                print(f'There is no checkpoint for {s}.')
+
+    with open('aws_configs/default_s3_bucket.txt', 'r') as fh:
+        S3_BUCKET_NAME = fh.read()
+    with open('aws_configs/group_id.txt', 'r') as fh:
+        GROUP_ID = int(fh.read())
+    timestamp = datetime.now().strftime('%m%d-%H%M')
+    run_name = f'G{GROUP_ID}_{timestamp}_{config["name"]}_{str(uuid.uuid4())[:5]}'
+    s3_log_path = f"s3://{S3_BUCKET_NAME}/{run_name}/"
+    with open('instance_state.txt', 'a') as fh:
+        fh.write(f'{s3_log_path}\n')
+    train(config, run_name, s3_log_path)
+    os.remove('instance_state.txt')
