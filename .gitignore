@@ -1,0 +1,8 @@
+.idea
+__pycache__
+wandb
+*.log
+*.key
+aws_configs/default_s3_bucket.txt
+aws_configs/group_id.txt
+*warmed_up

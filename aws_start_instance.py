@@ -11,10 +11,8 @@ import argparse
 AWS = 'aws'   # path to `aws` CLI executable
 
 PERMISSION_FILE_PATH = '~/.ssh/dlad-aws.pem'
-AMI = 'ami-0445089cdd8eacae6' # Pre-setup AMI based on Deep Learning AMI (Ubuntu 18.04) Version 41.0 AMI 05f6982c11ca3027d
-INSTANCE_TYPE_TRAIN = 'p3.2xlarge'
-INSTANCE_TYPE_DEVEL = 'm5n.xlarge'
-REGION = 'us-east-1'
+AMI = 'ami-0b64362b8113b27fd' # Pre-setup AMI based on Deep Learning AMI (Ubuntu 18.04) Version 41.0 AMI 07f83f2fb8212ce3b
+REGION = 'us-east-2'
 NON_ROOT = 'ubuntu'
 TIMEOUT_TRAIN = 24  # in hours
 TIMEOUT_DEVEL = 4  # in hours

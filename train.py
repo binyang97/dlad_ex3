@@ -167,7 +167,7 @@ if __name__=='__main__':
         "EC2_SSH_Tmux": f"{build_ssh_cmd(ec2_hostname)} -t tmux attach-session -t dlad",
         "EC2_Rsync": build_rsync_cmd(ec2_hostname),
         "S3_Path": s3_log_path,
-        "S3_Link": f"https://s3.console.aws.amazon.com/s3/buckets/{S3_BUCKET_NAME}?region=us-east-1&prefix={run_name}/",
+        "S3_Link": f"https://s3.console.aws.amazon.com/s3/buckets/{S3_BUCKET_NAME}?region=us-east-2&prefix={run_name}/",
         "Group_Id": GROUP_ID
     }
     wandb_logger.log_hyperparams({**ec2_meta, **config})

@@ -7,5 +7,5 @@ pip install "git+https://github.com/erikwijmans/Pointnet2_PyTorch.git#egg=pointn
 # Download dataset if necessary
 if [ ! -d "/home/ubuntu/dataset" ]; then
   echo "Download data..."
-  aws s3 sync s3://dlad-ex3-data/ /home/ubuntu/dataset/
+  aws s3 sync s3://dlad-ex3-2021/ /home/ubuntu/dataset/
 fi
