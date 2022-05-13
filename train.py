@@ -221,7 +221,7 @@ if __name__ == '__main__':
         with open('instance_state.txt', 'r') as fh:
             states = fh.readlines()
         for s in reversed(states):
-            last_resume_ckpt = get_newest_ckpt(s)
+            last_resume_ckpt = get_newest_ckpt(s.replace('\n',''))
             if last_resume_ckpt is not None:
                 config['resume_from_checkpoint'] = last_resume_ckpt
                 print(f'Resume from {last_resume_ckpt}.')
