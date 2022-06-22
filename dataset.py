@@ -15,6 +15,7 @@ class DatasetLoader(Dataset):
     def __init__(self, config, split):
         self.config, self.split = config, split
         root_dir = config['root_dir']
+        print(root_dir)
         assert(os.path.isdir(root_dir))
 
         t_path = os.path.join(root_dir, f'project3_{split}.txt')

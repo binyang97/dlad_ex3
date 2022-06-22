@@ -5,7 +5,7 @@
 name: 'default'
 
 data:
-    root_dir: '/home/ubuntu/dataset'
+    root_dir: './data/'
     batch_size: 4
     delta: 1.0                  # Task 2a: Extension of the bounding boxes
     max_points: 512             # Task 2b: Maximum points per pooled region
@@ -41,13 +41,13 @@ loss:
     negative_cls_ub: 0.45
 
 eval:
-    output_dir: '/home/ubuntu/results/'
+    output_dir: './data/'
     t_rpn_recall: 0.5           # Task 1: RPN recall threshold
     t_nms: 0.1                  # Task 5: NMS threshold
     t_score: 0.3                # Task 6: Refinement network score threshold
 
 trainer:
-    default_root_dir: '/home/ubuntu/results'
+    default_root_dir: './data/'
     max_epochs: 35
     check_val_every_n_epoch: 1
     resume_from_checkpoint:
