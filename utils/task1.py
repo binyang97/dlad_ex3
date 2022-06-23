@@ -121,7 +121,7 @@ def get_iou(pred, target):
 
         IOU.append(iou_row)
     
-    #print(IOU)
+    IOU = np.array(IOU)
     
     return IOU
             
@@ -147,7 +147,7 @@ def compute_recall(pred, target, threshold):
 
     #print(iou)
 
-    iou = np.asarray(iou)
+    # iou = np.asarray(iou)
     iou = iou.T
     
     for i in range(len(iou)):
