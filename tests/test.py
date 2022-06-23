@@ -70,11 +70,16 @@ class CheckTest():
 									feat=self.ds.get_data(0, 'features'),
 									config=self.config['data'])
 		duration = timer() - start
+
+		#print(recorded_valid_pred.shape)
+		#print(len(valid_pred))
 		if not warmup:
 			print('duration [ms]:  {:.1f}/{:.1f}'.format(duration*1000, recorded_duration*1000))
 		# Check results
+		#print(DURATION_THRESHOLD*recorded_duration)
 		if not warmup:
 			self.display_test_result(
+				#(valid_pred==recorded_valid_pred).all(),
 				(valid_pred==recorded_valid_pred).all(),
 				duration > DURATION_THRESHOLD*recorded_duration
 			)

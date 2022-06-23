@@ -1,8 +1,23 @@
+from cmath import exp
 import numpy as np
 from scipy.spatial import ConvexHull
 from shapely import geometry
 
-def label2corners(label):
+def expand_bbox(box, delta):
+    '''
+    expand bounding box with given distance in all directions
+    input (8, 3) corners coordinates
+    '''
+
+    direction = np.sign(box)
+
+    direction[direction == 0] = 1
+    
+    newbox = box + direction * delta
+
+    return newbox
+
+def label2corners(label, expand = False, delta = 1):
     '''
     Task 1
     input
@@ -29,15 +44,20 @@ def label2corners(label):
             |/         |/
             6 -------- 7
         ''' 
-        corner_3d = [[l/2, -h,  w/2],
+        corner_3d = np.array([[l/2, -h,  w/2],
                     [-l/2, -h,  w/2],
                     [-l/2, -h, -w/2],
                     [ l/2, -h, -w/2],
                     [ l/2,  0,  w/2],
                     [-l/2,  0,  w/2],
                     [-l/2,  0, -w/2],
-                    [ l/2,  0, -w/2]]
-        corner_3d = np.array(corner_3d)
+                    [ l/2,  0, -w/2]])
+
+        
+        #corner_3d = np.array(corner_3d)
+
+        if expand:
+            corner_3d = expand_bbox(corner_3d, delta = delta)
         corner_3d = np.hstack([corner_3d, np.ones((8,1))])
         corner_3d = corner_3d.T
 
