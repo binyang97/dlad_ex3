@@ -34,7 +34,6 @@ class ClassificationLoss(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.m = nn.Sigmoid()
         self.loss = nn.BCELoss()
 
     def forward(self, pred, iou):
