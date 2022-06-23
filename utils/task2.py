@@ -7,6 +7,8 @@ from timeit import default_timer as timer
 
 from numba import njit
 
+import cupy as cp
+
 
 # def expand_label(pred, delta = 1.0):
 #     labels = pred.copy()
@@ -32,6 +34,22 @@ def dot_product(v1, v2):
         out += v1[k] * v2[k]
     return out
 
+
+def create_mask(expand_box, xyz):
+    o, a, b, c = expand_box[0], expand_box[1], expand_box[3], expand_box[4]
+
+    oa = a - o
+    ob = b - o
+    oc = c - o
+    xyz_oa = np.dot(xyz, oa)
+    xyz_ob = np.dot(xyz, ob)
+    xyz_oc = np.dot(xyz, oc)
+
+    mask = (xyz_oa > np.dot(oa, o)) & (xyz_oa < np.dot(oa, a)) & \
+            (xyz_ob > np.dot(ob, o)) & (xyz_ob < np.dot(ob, b)) & \
+                (xyz_oc > np.dot(oc, o)) & (xyz_oc < np.dot(oc, c))
+
+    return mask 
 
 def roi_pool(pred, xyz, feat, config):
     '''
@@ -76,30 +94,18 @@ def roi_pool(pred, xyz, feat, config):
 
 
     for (i, expand_box) in enumerate(expand_corners_pred):
-        o, a, b, c = expand_box[0], expand_box[1], expand_box[3], expand_box[4]
-
-        oa = a - o
-        ob = b - o
-        oc = c - o
-        xyz_oa = np.dot(xyz, oa)
-        xyz_ob = np.dot(xyz, ob)
-        xyz_oc = np.dot(xyz, oc)
-
-        mask = (xyz_oa > np.dot(oa, o)) & (xyz_oa < np.dot(oa, a)) & \
-                (xyz_ob > np.dot(ob, o)) & (xyz_ob < np.dot(ob, b)) & \
-                    (xyz_oc > np.dot(oc, o)) & (xyz_oc < np.dot(oc, c))
+        
+        mask = create_mask(expand_box = expand_box, xyz = xyz)
 
         validity[i] = np.any(mask)
-        valid_xyz = xyz[mask]
-
+        
         valid_indices = indices[mask]
-
-
         num_max_points = config['max_points']
+        valid_xyz = xyz[valid_indices]
         
         if len(valid_xyz) == num_max_points:
             
-            valid_features = feat[mask]
+            valid_features = feat[valid_indices]
 
         elif len(valid_xyz) > num_max_points:
             delete_point_num = len(valid_xyz) - num_max_points
@@ -110,7 +116,7 @@ def roi_pool(pred, xyz, feat, config):
             assert len(valid_xyz) == num_max_points
 
         elif len(valid_xyz) < num_max_points and len(valid_xyz) > 0:
-            valid_features = feat[mask]
+            valid_features = feat[valid_indices]
             add_point_num = num_max_points - len(valid_xyz)
             sample_indices = rng.choice(valid_indices, size = add_point_num ,replace = True)
 
