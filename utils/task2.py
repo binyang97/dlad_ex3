@@ -4,6 +4,8 @@ from pyro import sample
 from .task1 import label2corners, box3d_vol
 from timeit import default_timer as timer
 
+from numba import njit
+
 
 # def expand_label(pred, delta = 1.0):
 #     labels = pred.copy()
@@ -20,6 +22,11 @@ from timeit import default_timer as timer
 #         expand_labels.append(label)
     
 #     return expand_labels
+#@njit
+
+@njit
+def vstack(arr1, arr2):
+    return np.vstack((arr1, arr2))
 
 def roi_pool(pred, xyz, feat, config):
     '''
@@ -65,46 +72,53 @@ def roi_pool(pred, xyz, feat, config):
     #pooled_feat = np.array([np.ones(C)])
 
     valid_pred = []
-    pooled_xyz = []
-    pooled_feat = []
+    #pooled_xyz = []
+    #pooled_feat = []
+
+    pooled = []
 
     indices = np.arange(N)
 
     #print(pred.shape)
     #start2= timer()
-    for (label, expand_box) in zip(pred, expand_corners_pred):
+    validity = np.ones(len(pred), dtype = bool)
+
+
+    for (i, expand_box) in enumerate(expand_corners_pred):
 
         # Create a binary mask for each bounding box regarding to the location of each point
-        min_x = np.min(expand_box[:,0])
-        max_x = np.max(expand_box[:,0])
-        min_y = np.min(expand_box[:,1])
-        max_y = np.max(expand_box[:,1])
-        min_z = np.min(expand_box[:,2])
-        max_z = np.max(expand_box[:,2])
+        o, a, b, c = expand_box[0], expand_box[1], expand_box[3], expand_box[4]
 
-        mask_x = np.logical_and((xyz[:, 0] >= min_x) , (xyz[:, 0] <= max_x))
-        mask_y = np.logical_and((xyz[:, 1] >= min_y) , (xyz[:, 1] <= max_y))
-        mask_z = np.logical_and((xyz[:, 2] >= min_z) , (xyz[:, 2] <= max_z))
+        oa = a - o
+        ob = b - o
+        oc = c - o
 
-        mask = mask_x & mask_y & mask_z
+
+        mask_a = (np.dot(xyz, oa) > np.dot(oa, o)) & (np.dot(xyz, oa) < np.dot(oa, a))
+        mask_b = (np.dot(xyz, ob) > np.dot(ob, o)) & (np.dot(xyz, ob) < np.dot(ob, b))
+        mask_c = (np.dot(xyz, oc) > np.dot(oc, o)) & (np.dot(xyz, oc) < np.dot(oc, c))
+
+        mask = mask_a & mask_b & mask_c
 
         #print(np.any(mask))
         #print(np.any(mask))
         # if no points are located in the box, continue to the next box
-        if np.any(mask) == False:
-            continue
+        #if np.any(mask) == False:
+            #continue
         
         #masks_box.append(mask)
 
+        validity[i] = np.any(mask)
         valid_xyz = xyz[mask]
 
-        #print(valid_xyz)
         #valid_features = feat[mask]
         valid_indices = indices[mask]
 
-        valid_pred.append(label)
+        #valid_pred.append(label)
 
         num_max_points = config['max_points']
+        #print(len(valid_xyz))
+        
         if len(valid_xyz) == num_max_points:
             
             valid_features = feat[mask]
@@ -124,24 +138,43 @@ def roi_pool(pred, xyz, feat, config):
 
             #pooled_xyz.append(valid_xyz)
             #pooled_feat.append(valid_features)
-        elif len(valid_xyz) < num_max_points:
+        elif len(valid_xyz) < num_max_points and len(valid_xyz) > 0:
             valid_features = feat[mask]
             add_point_num = num_max_points - len(valid_xyz)
             sample_indices = rng.choice(valid_indices, size = add_point_num ,replace = True)
 
             valid_xyz = np.vstack((valid_xyz, xyz[sample_indices]))
             valid_features = np.vstack((valid_features, feat[sample_indices]))
+           # valid_xyz = vstack(valid_xyz, xyz[sample_indices])
+            #valid_features = vstack(valid_features, feat[sample_indices])
 
             assert len(valid_xyz) == num_max_points
             #pooled_xyz.append(valid_xyz)
             #pooled_feat.append(valid_features)
-        else:
-            raise Error
+        #else:
+            #raise AssertionError
     #time2 = timer() - start2
-    pooled_xyz.append(valid_xyz)
-    pooled_feat.append(valid_features)
-    #print(time2)
-    #valid_pred = valid_pred[1:]
-    #pooled_xyz = pooled_xyz[1:]
-    #pooled_feat = pooled_feat[1:]
+        #pooled_xyz.append(valid_xyz)
+        #pooled_feat.append(valid_features)
+        #print(len(np.unique(valid_xyz[:,1])))
+        if len(valid_xyz) != 0:
+            pooled.append([valid_xyz, valid_features])
+
+    #print(np.unique(valid_xyz[:,1]))
+
+    #print(validity)
+    #print(pooled[0][0].shape)
+    #pooled = np.array(pooled)
+    
+
+    valid_pred = pred[validity]
+    pooled_xyz, pooled_feat = zip(*pooled)
+
+    pooled_xyz = np.array(pooled_xyz)
+    pooled_feat = np.array(pooled_feat)
+
+    #print(pooled_feat.shape)
+    #pooled_xyz = np.array([ele[0] for ele in pooled])
+    #pooled_feat = np.array([ele[1] for ele in pooled])
+    
     return valid_pred, pooled_xyz, pooled_feat
