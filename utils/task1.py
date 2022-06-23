@@ -142,6 +142,7 @@ def get_iou(pred, target):
         IOU.append(iou_row)
     
     #print(IOU)
+    IOU = np.array(IOU)
     
     return IOU
             

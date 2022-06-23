@@ -1,4 +1,5 @@
 from msilib.schema import Error
+from turtle import dot
 import numpy as np
 from pyro import sample
 from .task1 import label2corners, box3d_vol
@@ -27,6 +28,14 @@ from numba import njit
 @njit
 def vstack(arr1, arr2):
     return np.vstack((arr1, arr2))
+#@njit
+def dot_product(v1, v2):
+    #assert len(v1) == len(v2)
+    out = 0
+    for k in range(len(v1)):
+        out += v1[k] * v2[k]
+    return out
+
 
 def roi_pool(pred, xyz, feat, config):
     '''
@@ -92,16 +101,14 @@ def roi_pool(pred, xyz, feat, config):
         oa = a - o
         ob = b - o
         oc = c - o
+        xyz_oa = np.dot(xyz, oa)
+        xyz_ob = np.dot(xyz, ob)
+        xyz_oc = np.dot(xyz, oc)
 
+        mask = (xyz_oa > np.dot(oa, o)) & (xyz_oa < np.dot(oa, a)) & \
+                (xyz_ob > np.dot(ob, o)) & (xyz_ob < np.dot(ob, b)) & \
+                    (xyz_oc > np.dot(oc, o)) & (xyz_oc < np.dot(oc, c))
 
-        mask_a = (np.dot(xyz, oa) > np.dot(oa, o)) & (np.dot(xyz, oa) < np.dot(oa, a))
-        mask_b = (np.dot(xyz, ob) > np.dot(ob, o)) & (np.dot(xyz, ob) < np.dot(ob, b))
-        mask_c = (np.dot(xyz, oc) > np.dot(oc, o)) & (np.dot(xyz, oc) < np.dot(oc, c))
-
-        mask = mask_a & mask_b & mask_c
-
-        #print(np.any(mask))
-        #print(np.any(mask))
         # if no points are located in the box, continue to the next box
         #if np.any(mask) == False:
             #continue
