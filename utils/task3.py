@@ -39,6 +39,11 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
     iou_target = np.max(co_iou, axis=1) #(N,)
     iou_target_index = np.argmax(co_iou, axis=1) #(N,)
 
+    # check
+    #print("Check1")
+    #print(len(iou_target_index))
+    #print(len(target))
+
     if not train:
         assigned_targets = target[iou_target_index] #(N,7)
         return assigned_targets, xyz, feat, iou_target
@@ -49,6 +54,9 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
         fg_cr2_num = target.shape[0] #M
         iou_pred = np.max(co_iou, axis=0) #(fg_cr2_num,) w.r.t. pred
         iou_pred_index = np.argmax(co_iou, axis=0) #(fg_cr2_num,) pred
+
+        #print("Check2")
+        #print(len(iou_pred), len(pred))
 
         fg_num = fg_cr1_num + fg_cr2_num
 
@@ -96,6 +104,12 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
                              iou_target[bg_easy_index[bg_easy_choice]],
                              iou_target[bg_hard_index[bg_hard_choice]]])
 
+        # Check 
+        assert assigned_targets.shape == (64, 7)
+        assert xyz_ret.shape == (64, 512, 3)
+        assert assigned_targets.shape == (64, 512, feat.shape[2])
+        assert len(iou_ret) == 64
+
         return assigned_targets, xyz_ret, feat_ret, iou_ret
 
 def sample_fg(num_needed, fg_cr1_num, fg_cr2_num):
@@ -128,4 +142,3 @@ def sample_w_padding(num_elements, num_needed):
         choice = np.arange(num_elements)
         repeat = np.random.choice(num_elements, size=num_needed-num_elements, replace=True)
         return np.concatenate((choice, repeat))
-    

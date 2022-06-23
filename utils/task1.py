@@ -1,8 +1,23 @@
+from cmath import exp
 import numpy as np
 from scipy.spatial import ConvexHull
 from shapely import geometry
 
-def label2corners(label):
+def expand_bbox(box, delta):
+    '''
+    expand bounding box with given distance in all directions
+    input (8, 3) corners coordinates
+    '''
+
+    direction = np.sign(box)
+
+    direction[direction == 0] = 1
+    
+    newbox = box + direction * delta
+
+    return newbox
+
+def label2corners(label, expand = False, delta = 1):
     '''
     Task 1
     input
@@ -29,15 +44,20 @@ def label2corners(label):
             |/         |/
             6 -------- 7
         ''' 
-        corner_3d = [[l/2, -h,  w/2],
+        corner_3d = np.array([[l/2, -h,  w/2],
                     [-l/2, -h,  w/2],
                     [-l/2, -h, -w/2],
                     [ l/2, -h, -w/2],
                     [ l/2,  0,  w/2],
                     [-l/2,  0,  w/2],
                     [-l/2,  0, -w/2],
-                    [ l/2,  0, -w/2]]
-        corner_3d = np.array(corner_3d)
+                    [ l/2,  0, -w/2]])
+
+        
+        #corner_3d = np.array(corner_3d)
+
+        if expand:
+            corner_3d = expand_bbox(corner_3d, delta = delta)
         corner_3d = np.hstack([corner_3d, np.ones((8,1))])
         corner_3d = corner_3d.T
 
@@ -92,22 +112,8 @@ def get_iou(pred, target):
 
             inter_area = poly1.intersection(poly2).area
 
-            #print(inter_area)
-
-            #print(rect1, rect2)
-            
-            #area1 = poly_area(np.array(rect1)[:,0], np.array(rect1)[:,1])
-            #area2 = poly_area(np.array(rect2)[:,0], np.array(rect2)[:,1])
-        
-            #inter, inter_area = convex_hull_intersection(rect1, rect2)
-            #print(inter_area)
-            #iou_2d = inter_area/(area1+area2-inter_area)
             ymin = max(corner_pred[0,1], corner_target[0,1])
             ymax = min(corner_pred[4,1], corner_target[4,1])
-
-            #print(ymax, ymin)
-
-            #print(ymin - ymax)
 
             inter_vol = inter_area * max(0.0, ymax-ymin)
             
@@ -115,12 +121,11 @@ def get_iou(pred, target):
             vol2 = box3d_vol(corner_target)
             iou = inter_vol / (vol1 + vol2 - inter_vol)
 
-            #print(iou)
 
             iou_row.append(iou)
 
         IOU.append(iou_row)
-    
+
     IOU = np.array(IOU)
     
     return IOU
@@ -143,20 +148,13 @@ def compute_recall(pred, target, threshold):
     TP = 0
     iou = get_iou(pred, target)
 
-    #print(len(pred), len(iou))
-
-    #print(iou)
-
     # iou = np.asarray(iou)
     iou = iou.T
     
     for i in range(len(iou)):
         iou_max = np.max(iou[i])
-        #print(iou_max)
         if iou_max > threshold:
             TP+=1
         elif iou_max < threshold:
             FN+=1
-    #print(TP/FN)
-    #print(FN, TP)
     return TP/(FN+TP)
