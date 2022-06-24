@@ -56,8 +56,8 @@ def roi_pool(pred, xyz, feat, config):
     # valid = np.array(valid)
     start = timer()
     valid_pred = pred[valid]
-    pooled_xyz = xyz[valid_indices].reshape(-1,config['max_points'], xyz.shape[1])
-    pooled_feat = feat[valid_indices].reshape(-1,config['max_points'], feat.shape[1])
+    pooled_xyz = xyz[valid_indices]
+    pooled_feat = feat[valid_indices]
     print(pooled_xyz.shape)
     print(pooled_feat.shape)
 
@@ -147,21 +147,25 @@ def points_in_boxes(xyz, boxes, max_points):
         valid (K') index vector showing valid bounding boxes, i.e. with at least
                    one point within the box
     '''
-    valid_indices = []
+    valid_indices = np.zeros((boxes.shape[0], max_points))
     valid = []
     for (i, box) in enumerate(boxes):
         xyz_index = points_in_box(xyz, box)
 
+        K_prime = 0
         if len(xyz_index) > 0:
             start = timer()
-            valid_index = sample_w_padding(xyz_index, max_points)
-            valid_indices.append(valid_index)
+            valid_indices[K_prime] = sample_w_padding(xyz_index, max_points)
+            # valid_index = sample_w_padding(xyz_index, max_points)
+            # valid_indices.append(valid_index)
             valid.append(i)
+            K_prime += 1
             duration = timer() - start
             print('append duration [ms]:  {:.1f}'.format(duration*1000))
 
     start = timer()
-    valid_indices = np.concatenate(valid_indices)
+    # valid_indices = np.array(valid_indices)
+    valid_indices = valid_indices[:K_prime]
     valid = np.array(valid)
 
     duration = timer() - start
