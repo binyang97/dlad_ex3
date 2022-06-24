@@ -147,25 +147,21 @@ def points_in_boxes(xyz, boxes, max_points):
         valid (K') index vector showing valid bounding boxes, i.e. with at least
                    one point within the box
     '''
-    valid_indices = np.zeros((boxes.shape[0], max_points))
+    valid_indices = []
     valid = []
     for (i, box) in enumerate(boxes):
         xyz_index = points_in_box(xyz, box)
 
-        K_prime = 0
         if len(xyz_index) > 0:
             start = timer()
-            valid_indices[K_prime] = sample_w_padding(xyz_index, max_points)
-            # valid_index = sample_w_padding(xyz_index, max_points)
-            # valid_indices.append(valid_index)
+            valid_index = sample_w_padding(xyz_index, max_points)
+            valid_indices.append(valid_index)
             valid.append(i)
-            K_prime += 1
             duration = timer() - start
             print('append duration [ms]:  {:.1f}'.format(duration*1000))
 
     start = timer()
-    # valid_indices = np.array(valid_indices)
-    valid_indices = valid_indices[:K_prime]
+    valid_indices = np.array(valid_indices)
     valid = np.array(valid)
 
     duration = timer() - start
@@ -175,8 +171,8 @@ def points_in_boxes(xyz, boxes, max_points):
 def sample_w_padding(indices, num_needed):
     num_elements = indices.size
     if num_elements >= num_needed:
-        return np.random.choice(indices, size=num_needed, replace=False)
+        return np.random.choice(num_elements, size=num_needed, replace=False)
     else:
         choice = indices
-        repeat = np.random.choice(indices, size=num_needed-num_elements, replace=True)
+        repeat = np.random.choice(num_elements, size=num_needed-num_elements, replace=True)
         return np.concatenate((choice, repeat))
