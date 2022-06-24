@@ -29,40 +29,11 @@ def roi_pool(pred, xyz, feat, config):
         config['delta'] extend the bounding box by delta on all sides (in meters)
         config['max_points'] number of points in the final sampled ROI
     '''
-    start = timer()
     enlarged_pred = enlarge_box(pred, config['delta'])
-
     valid_indices, valid = points_in_boxes(xyz, enlarged_pred, config['max_points'])
-    duration = timer() - start
-    print('boxes duration [ms]:  {:.1f}'.format(duration*1000))
-
-    # for (i, box) in enumerate(enlarged_pred):
-    #     xyz_index = points_in_box(xyz, box)
-
-    #     if len(xyz_index) > 0:
-    #         valid_index = sample_w_padding(xyz_index, config['max_points'])
-    #         # pooled_xyz[i] = xyz[valid_indices]
-    #         # pooled_feat[i] = feat[valid_indices]
-    #         # pooled_xyz.append(xyz[valid_index])
-    #         # pooled_feat.append(feat[valid_index])
-    #         valid_indices.append(valid_index)
-    #         valid.append(i)
-        
-    # valid_indices = np.concatenate(valid_indices)
-    # pooled_xyz = pooled_xyz[valid]
-    # pooled_feat = pooled_feat[valid]
-    # pooled_xyz = np.array(pooled_xyz)
-    # pooled_feat = np.array(pooled_xyz)
-    # valid = np.array(valid)
-    start = timer()
     valid_pred = pred[valid]
     pooled_xyz = xyz[valid_indices]
     pooled_feat = feat[valid_indices]
-    print(pooled_xyz.shape)
-    print(pooled_feat.shape)
-
-    duration = timer() - start
-    print('indexing duration [ms]:  {:.1f}'.format(duration*1000))
 
     return valid_pred, pooled_xyz, pooled_feat
 
@@ -74,8 +45,9 @@ def enlarge_box(box, extention):
     output
         extended_box (N,7) extended bounding box label
     '''
-    box[:, 3:6] += 2 * extention
-    return box
+    enlarged_box = box.copy()
+    enlarged_box[:, 3:6] += 2 * extention
+    return enlarged_box
 
 def points_in_box(xyz, box):
     '''
@@ -85,7 +57,6 @@ def points_in_box(xyz, box):
     output
         xyz_index (# of valid xyz,) indices of points that are in each k' bounding box
     '''
-    start = timer()
     h = box[3]
     w = box[4]
     l = box[5]
@@ -116,23 +87,13 @@ def points_in_box(xyz, box):
     xyz_sub = xyz[xyz_sub_index]
     xyz_sub = np.hstack([xyz_sub, np.ones((len(xyz_sub),1))]).T
 
-    duration = timer() - start
-    print('crop duration [ms]:  {:.1f}'.format(duration*1000))
-
-    # xyz_prime = np.zeros(xyz_sub.shape)
-    xyz_prime = np.dot(T_inv, xyz_sub)
-    xyz_prime = xyz_prime.T
+    xyz_prime = np.dot(T_inv, xyz_sub).T
 
     xyz_prime_mask = (xyz_prime[:,0] >= -l/2) & (xyz_prime[:,0] <= l/2) & \
                      (xyz_prime[:,1] <= 0) & (xyz_prime[:,1] >= -h) & \
                      (xyz_prime[:,2] >= -w/2) & (xyz_prime[:,2] <= w/2)
 
-    # xyz_prime_index = np.where(xyz_prime_mask)[0]
     xyz_index = xyz_sub_index[xyz_prime_mask]
-    print(xyz_index.shape)
-
-    duration = timer() - start
-    print('dot duration [ms]:  {:.1f}'.format(duration*1000))
 
     return xyz_index
 
@@ -153,19 +114,13 @@ def points_in_boxes(xyz, boxes, max_points):
         xyz_index = points_in_box(xyz, box)
 
         if len(xyz_index) > 0:
-            start = timer()
             valid_index = sample_w_padding(xyz_index, max_points)
             valid_indices.append(valid_index)
             valid.append(i)
-            duration = timer() - start
-            print('append duration [ms]:  {:.1f}'.format(duration*1000))
 
-    start = timer()
     valid_indices = np.array(valid_indices)
     valid = np.array(valid)
 
-    duration = timer() - start
-    print('to array duration [ms]:  {:.1f}'.format(duration*1000))
     return valid_indices, valid
 
 def sample_w_padding(indices, num_needed):
