@@ -13,7 +13,8 @@ import boto3
 AWS = 'aws'   # path to `aws` CLI executable
 
 PERMISSION_FILE_PATH = '~/.ssh/dlad-aws.pem'
-AMI = 'ami-0b64362b8113b27fd' # Pre-setup AMI based on Deep Learning AMI (Ubuntu 18.04) Version 41.0 AMI 07f83f2fb8212ce3b
+#AMI = 'ami-0b64362b8113b27fd' # Pre-setup AMI based on Deep Learning AMI (Ubuntu 18.04) Version 41.0 AMI 07f83f2fb8212ce3b
+AMI = 'ami-07f83f2fb8212ce3b'
 REGION = 'us-east-2'
 NON_ROOT = 'ubuntu'
 TIMEOUT = {'train': 48, 'devel': 4}  # in hours
@@ -115,7 +116,8 @@ if __name__ == '__main__':
     gen_code_archive(code_archive)
     s3 = boto3.client('s3')
     with open('aws_configs/default_s3_bucket.txt', 'r') as fh:
-        S3_BUCKET_NAME = fh.read()
+        #S3_BUCKET_NAME = fh.read()
+        S3_BUCKET_NAME = 'dlad22-team28-ex3'
     response = s3.upload_file(code_archive, S3_BUCKET_NAME,
                               f'code/{code_archive}')
     os.remove(code_archive)

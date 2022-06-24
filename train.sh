@@ -1,1 +1,1 @@
-python3 aws_start_instance.py --instance m5n.xlarge --mode train
+python3 aws_start_instance.py --instance p2.xlarge --mode train
