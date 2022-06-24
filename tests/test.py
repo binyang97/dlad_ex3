@@ -26,7 +26,7 @@ DURATION_THRESHOLD = 1.5
 class CheckTest():
 	def __init__(self, config, recordings_dir):
 		self.config, self.recordings_dir = config, recordings_dir
-		self.ds = DatasetLoader(config['data'], 'minival')
+		self.ds = DatasetLoader(config['data'], 'val')
 
 	def display_test_result(self, result, duration=False):
 		result_message = 'Test passed.' if result else 'Test failed.'
@@ -114,7 +114,11 @@ class CheckTest():
 		recorded_s_f = np.load(os.path.join(self.recordings_dir, 'task5_s_f.npy'))
 		recorded_c_f = np.load(os.path.join(self.recordings_dir, 'task5_c_f.npy'))
 		# NMS
+		start = timer()
 		s_f, c_f = nms(pred, score, self.config['eval']['t_nms'])
+		duration = timer() - start
+
+		print('duration [ms]:  {:.1f}'.format(duration*1000))
 
 		# Check results
 		self.display_test_result(

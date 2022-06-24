@@ -51,7 +51,7 @@ class ClassificationLoss(nn.Module):
             self.config['negative_cls_ub'] upper bound for negative samples
         '''
         N = pred.size(0)
-        target = torch.zeros(N,1)
+        target = torch.zeros((N,1), device=pred.device)
         
         mask_pos = iou >= self.config['positive_cls_lb']
         mask_neg = iou <= self.config['negative_cls_ub']

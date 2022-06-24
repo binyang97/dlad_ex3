@@ -1,37 +1,9 @@
-from msilib.schema import Error
-from turtle import dot
+from logging.config import valid_ident
 import numpy as np
-from pyro import sample
-from .task1 import label2corners, box3d_vol
 from timeit import default_timer as timer
 
-from numba import njit
 
-
-# def expand_label(pred, delta = 1.0):
-#     labels = pred.copy()
-#     expand_labels = []
-#     for label in labels:
-#         #label[0] = label[0] + delta 
-#         #label[1] = label[1] + delta 
-#         label[2] = label[2] + delta 
-
-#         label[3] = label[3] + delta * 2
-#         label[4] = label[4] + delta * 2
-#         label[5] = label[5] + delta * 2
-
-#         expand_labels.append(label)
-    
-#     return expand_labels
-#@njit
-#@njit
-def dot_product(v1, v2):
-    #assert len(v1) == len(v2)
-    out = 0
-    for k in range(len(v1)):
-        out += v1[k] * v2[k]
-    return out
-
+from utils.task3 import sample_w_padding
 
 def roi_pool(pred, xyz, feat, config):
     '''
@@ -46,7 +18,7 @@ def roi_pool(pred, xyz, feat, config):
        If there are less points within a bounding box, randomly repeat points until
        512. If there are no points within a bounding box, the box should be discarded.
     input
-        pred (N,7) bounding box labels
+        pred (K,7) bounding box labels
         xyz (N,3) point cloud
         feat (N,C) features
         config (dict) data config
@@ -60,74 +32,136 @@ def roi_pool(pred, xyz, feat, config):
         config['delta'] extend the bounding box by delta on all sides (in meters)
         config['max_points'] number of points in the final sampled ROI
     '''
+    # pooled_xyz = []
+    # pooled_feat = []
+    # valid = []
+    enlarged_pred = enlarge_box(pred, config['delta'])
 
-    N = feat.shape[0]
-    expand_corners_pred = label2corners(pred, expand = True, delta = config['delta'])
+    # for (i, box) in enumerate(enlarged_pred):
+    #     xyz_index = points_in_box(xyz, box)
+    #     xyz_num = xyz_index.size
 
-    rng = np.random.default_rng(seed = 12345)
+    #     if xyz_num > 0:
+    #         xyz_choice = sample_w_padding(xyz_num, config['max_points'])
+    #         valid_index = xyz_index[xyz_choice]
+    #         valid.append(i)
+    #         pooled_xyz.append(xyz[valid_index])
+    #         pooled_feat.append(feat[valid_index])
 
+    # valid = np.array(valid)
 
-    valid_pred = []
-    pooled = []
+    pooled_xyz, pooled_feat, valid = points_in_boxes(xyz, feat, enlarged_pred, config['max_points'])
 
-    indices = np.arange(N)
+    start = timer()
+    valid_pred = pred[valid]
+    # pooled_xyz = np.array([xyz[k] for k in valid_indices])
+    # pooled_feat = np.array([feat[k] for k in valid_indices])
 
-    validity = np.ones(len(pred), dtype = bool)
+    duration = timer() - start
+    print('main duration [ms]:  {:.1f}'.format(duration*1000))
 
-
-    for (i, expand_box) in enumerate(expand_corners_pred):
-        o, a, b, c = expand_box[0], expand_box[1], expand_box[3], expand_box[4]
-
-        oa = a - o
-        ob = b - o
-        oc = c - o
-        xyz_oa = np.dot(xyz, oa)
-        xyz_ob = np.dot(xyz, ob)
-        xyz_oc = np.dot(xyz, oc)
-
-        mask = (xyz_oa > np.dot(oa, o)) & (xyz_oa < np.dot(oa, a)) & \
-                (xyz_ob > np.dot(ob, o)) & (xyz_ob < np.dot(ob, b)) & \
-                    (xyz_oc > np.dot(oc, o)) & (xyz_oc < np.dot(oc, c))
-
-        validity[i] = np.any(mask)
-        valid_xyz = xyz[mask]
-
-        valid_indices = indices[mask]
-
-
-        num_max_points = config['max_points']
-        
-        if len(valid_xyz) == num_max_points:
-            
-            valid_features = feat[mask]
-
-        elif len(valid_xyz) > num_max_points:
-            delete_point_num = len(valid_xyz) - num_max_points
-            sample_indices = rng.choice(valid_indices, size = delete_point_num ,replace = False)
-            mask[sample_indices] = False
-            valid_xyz = xyz[mask]
-            valid_features = feat[mask]
-            assert len(valid_xyz) == num_max_points
-
-        elif len(valid_xyz) < num_max_points and len(valid_xyz) > 0:
-            valid_features = feat[mask]
-            add_point_num = num_max_points - len(valid_xyz)
-            sample_indices = rng.choice(valid_indices, size = add_point_num ,replace = True)
-
-            valid_xyz = np.vstack((valid_xyz, xyz[sample_indices]))
-            valid_features = np.vstack((valid_features, feat[sample_indices]))
-
-            assert len(valid_xyz) == num_max_points
-        if len(valid_xyz) != 0:
-            pooled.append([valid_xyz, valid_features])
-
-    
-
-    valid_pred = pred[validity]
-    pooled_xyz, pooled_feat = zip(*pooled)
-
-    pooled_xyz = np.array(pooled_xyz)
-    pooled_feat = np.array(pooled_feat)
-
-    
     return valid_pred, pooled_xyz, pooled_feat
+
+def enlarge_box(box, extention):
+    '''
+    input
+        box (N,7) 3D bounding box label (x,y,z,h,w,l,ry)
+        extention (float)  extend the bounding box by extension on all sides in meters
+    output
+        extended_box (N,7) extended bounding box label
+    '''
+    box[:, 3:6] += 2 * extention
+    return box
+
+def points_in_box(xyz, box):
+    '''
+    input
+        xyz (N,3) point coordinates in rectified reference frame
+        box (7,) 3d bounding box label (x,y,z,h,w,l,ry)
+    output
+        xyz_index (# of valid xyz,) indices of points that are in each k' bounding box
+    '''
+    start = timer()
+    h = box[3]
+    w = box[4]
+    l = box[5]
+    x = box[0]
+    y = box[1]
+    z = box[2]
+    ry = box[6]
+    d = np.sqrt(l**2+w**2)
+
+    cos_ry = np.cos(ry)
+    sin_ry = np.sin(ry)
+    T = [[ cos_ry, 0, sin_ry, x],
+        [0,       1, 0,      y],
+        [-sin_ry, 0, cos_ry, z]]
+    T = np.array(T)
+    C = T[:3, :3]
+    r = T[:3,  3]
+    T_inv = np.zeros((3,4))
+    T_inv[:3,:3] = C.T
+    T_inv[:3, 3] = np.dot(-C.T, r)
+
+    xyz_sub_mask =  (xyz[:,0] >= x-d/2) & (xyz[:,0] <= x+d/2) & \
+                    (xyz[:,1] <= y) & (xyz[:,1] >= y-h) & \
+                    (xyz[:,2] >= z-d/2) & (xyz[:,2] <= z+d/2)
+
+    xyz_sub_index = np.where(xyz_sub_mask)[0]
+
+    xyz_sub = xyz[xyz_sub_index]
+    xyz_sub = np.hstack([xyz_sub, np.ones((len(xyz_sub),1))]).T
+
+    duration = timer() - start
+    print('crop duration [ms]:  {:.1f}'.format(duration*1000))
+
+    start = timer()
+    xyz_prime = np.zeros(xyz_sub.shape)
+    xyz_prime = np.dot(T_inv, xyz_sub)
+    xyz_prime = xyz_prime.T
+
+    xyz_prime_mask = (xyz_prime[:,0] >= -l/2) & (xyz_prime[:,0] <= l/2) & \
+                     (xyz_prime[:,1] <= 0) & (xyz_prime[:,1] >= -h) & \
+                     (xyz_prime[:,2] >= -w/2) & (xyz_prime[:,2] <= w/2)
+
+    xyz_prime_index = np.where(xyz_prime_mask)[0]
+    xyz_index = xyz_sub_index[xyz_prime_index]
+    print(xyz_index.shape)
+
+    duration = timer() - start
+    print('dot duration [ms]:  {:.1f}'.format(duration*1000))
+
+    return xyz_index
+
+
+def points_in_boxes(xyz, feat, boxes, max_points):
+    '''
+    input
+        xyz (N,3) points in rectified reference frame
+        boxes (K,7) 3d bounding box labels (x,y,z,h,w,l,ry)
+    output
+        valid_indices (K',M) indices of points that are in each k' bounding box
+        valid (K') index vector showing valid bounding boxes, i.e. with at least
+                   one point within the box
+    '''
+    # valid_indices = []
+    pooled_xyz = []
+    pooled_feat = []
+    valid = []
+    for (i, box) in enumerate(boxes):
+        xyz_index = points_in_box(xyz, box)
+        xyz_num = xyz_index.size
+
+        if xyz_num > 0:
+            xyz_choice = sample_w_padding(xyz_num, max_points)
+            valid_indices = xyz_index[xyz_choice]
+            pooled_xyz.append(xyz[valid_indices])
+            pooled_feat.append(feat[valid_indices])
+            # valid_indices.append(xyz_index[xyz_choice])
+            valid.append(i)
+        
+    # valid_indices = np.vstack(valid_indices)
+    pooled_xyz = np.array(pooled_xyz)
+    pooled_feat = np.array(pooled_xyz)
+    valid = np.array(valid)
+    return pooled_xyz, pooled_feat, valid
