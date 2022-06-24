@@ -56,8 +56,10 @@ def roi_pool(pred, xyz, feat, config):
     # valid = np.array(valid)
     start = timer()
     valid_pred = pred[valid]
-    pooled_xyz = xyz[valid_indices]
-    pooled_feat = feat[valid_indices]
+    pooled_xyz = xyz[valid_indices].reshape(-1,config['max_points'], xyz.shape[1])
+    pooled_feat = feat[valid_indices].reshape(-1,config['max_points'], feat.shape[1])
+    print(pooled_xyz.shape)
+    print(pooled_feat.shape)
 
     duration = timer() - start
     print('indexing duration [ms]:  {:.1f}'.format(duration*1000))
@@ -159,7 +161,7 @@ def points_in_boxes(xyz, boxes, max_points):
             print('append duration [ms]:  {:.1f}'.format(duration*1000))
 
     start = timer()
-    valid_indices = np.array(valid_indices)
+    valid_indices = np.concatenate(valid_indices)
     valid = np.array(valid)
 
     duration = timer() - start
