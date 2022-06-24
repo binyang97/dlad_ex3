@@ -1,4 +1,5 @@
 from msilib.schema import Error
+from tracemalloc import start
 from turtle import dot
 import numpy as np
 from pyro import sample
@@ -34,6 +35,23 @@ def dot_product(v1, v2):
         out += v1[k] * v2[k]
     return out
 
+#@njit('uint8[:,:,::1](uint8[:,:,::1])', parallel=True)
+def create_masks(expand_boxes, xyz):
+    o, a, b, c = expand_boxes[:, 0], expand_boxes[:, 1], expand_boxes[:, 3], expand_boxes[:, 4]
+
+    oa = a - o
+    ob = b - o
+    oc = c - o
+
+    xyz_oa = np.dot(xyz, oa.T)
+    xyz_ob = np.dot(xyz, ob.T)
+    xyz_oc = np.dot(xyz, oc.T)
+
+    mask = (xyz_oa > np.einsum('ij,ij->i', oa, o)) & (xyz_oa < np.einsum('ij,ij->i', oa, a)) & \
+            (xyz_ob > np.einsum('ij,ij->i', ob, o)) & (xyz_ob < np.einsum('ij,ij->i', ob, b)) & \
+                (xyz_oc > np.einsum('ij,ij->i', oc, o)) & (xyz_oc < np.einsum('ij,ij->i', oc, c))
+
+    return mask.T
 
 def create_mask(expand_box, xyz):
     o, a, b, c = expand_box[0], expand_box[1], expand_box[3], expand_box[4]
@@ -85,14 +103,16 @@ def roi_pool(pred, xyz, feat, config):
     rng = np.random.default_rng(seed = 12345)
 
 
-    valid_pred = []
+    #valid_pred = []
     pooled = []
 
     indices = np.arange(N)
 
     validity = np.ones(len(pred), dtype = bool)
 
-
+    #masks = create_masks(expand_corners_pred, xyz = xyz)
+    #start1 = timer()
+    #for (i, mask) in enumerate(masks):
     for (i, expand_box) in enumerate(expand_corners_pred):
         
         mask = create_mask(expand_box = expand_box, xyz = xyz)
@@ -101,39 +121,47 @@ def roi_pool(pred, xyz, feat, config):
         
         valid_indices = indices[mask]
         num_max_points = config['max_points']
-        valid_xyz = xyz[valid_indices]
+        #valid_xyz = xyz[valid_indices]
         
-        if len(valid_xyz) == num_max_points:
+        if len(valid_indices) == num_max_points:
             
             valid_features = feat[valid_indices]
+            valid_xyz = xyz[valid_indices]
 
-        elif len(valid_xyz) > num_max_points:
-            delete_point_num = len(valid_xyz) - num_max_points
-            sample_indices = rng.choice(valid_indices, size = delete_point_num ,replace = False)
-            mask[sample_indices] = False
-            valid_xyz = xyz[mask]
-            valid_features = feat[mask]
-            assert len(valid_xyz) == num_max_points
+        elif len(valid_indices) > num_max_points:
+            #delete_point_num = len(valid_xyz) - num_max_points
+            #indices_for_sampling = np.arange(len(valid_indices))
+            sample_indices = rng.choice(valid_indices, size = num_max_points,replace = False)
+            #mask[sample_indices] = False
+            valid_xyz = xyz[sample_indices]
+            valid_features = feat[sample_indices]
+            #assert len(valid_xyz) == num_max_points
 
-        elif len(valid_xyz) < num_max_points and len(valid_xyz) > 0:
-            valid_features = feat[valid_indices]
-            add_point_num = num_max_points - len(valid_xyz)
+        elif len(valid_indices) < num_max_points: #and len(valid_indices) > 0:
+            #valid_features = feat[valid_indices]
+            #valid_xyz = xyz[valid_indices]
+            add_point_num = num_max_points - len(valid_indices)
             sample_indices = rng.choice(valid_indices, size = add_point_num ,replace = True)
 
-            valid_xyz = np.vstack((valid_xyz, xyz[sample_indices]))
-            valid_features = np.vstack((valid_features, feat[sample_indices]))
+            valid_xyz = np.vstack((xyz[valid_indices], xyz[sample_indices]))
+            valid_features = np.vstack((feat[valid_indices], feat[sample_indices]))
 
-            assert len(valid_xyz) == num_max_points
+            #assert len(valid_xyz) == num_max_points
         if len(valid_xyz) != 0:
             pooled.append([valid_xyz, valid_features])
 
-    
+    #time1 = timer() - start1
+    #print("Loop Time: ", time1)
 
+    #start2 = timer()
     valid_pred = pred[validity]
     pooled_xyz, pooled_feat = zip(*pooled)
 
     pooled_xyz = np.array(pooled_xyz)
     pooled_feat = np.array(pooled_feat)
+    #time2 = timer() - start2
+
+    #print("Split time:", time2)
 
     
     return valid_pred, pooled_xyz, pooled_feat

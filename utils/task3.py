@@ -72,10 +72,10 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
         bg_hard_num = bg_hard_index.size
         bg_num = bg_easy_num + bg_hard_num
 
-        fg_cr1_choice = np.array([])
-        fg_cr2_choice = np.array([])
-        bg_easy_choice = np.array([])
-        bg_hard_choice = np.array([])
+        fg_cr1_choice = np.array([], dtype = int)
+        fg_cr2_choice = np.array([], dtype = int)
+        bg_easy_choice = np.array([], dtype = int)
+        bg_hard_choice = np.array([], dtype = int)
 
         if bg_num == 0:
             fg_cr1_choice, fg_cr2_choice = sample_fg(64, fg_cr1_num, fg_cr2_num)
