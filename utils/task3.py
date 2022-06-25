@@ -1,5 +1,3 @@
-from dataclasses import replace
-from secrets import choice
 import numpy as np
 
 from .task1 import get_iou
@@ -39,13 +37,13 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
     iou_target = np.max(co_iou, axis=1) #(N,)
     iou_target_index = np.argmax(co_iou, axis=1) #(N,)
 
-    # check
-    #print("Check1")
-    #print(len(iou_target_index))
-    #print(len(target))
-
     if not train:
         assigned_targets = target[iou_target_index] #(N,7)
+
+        # print("assigned_targets", assigned_targets.shape)
+        # print("xyz", xyz.shape)
+        # print("feat", feat.shape)
+        # print("iou", iou_target.shape)
         return assigned_targets, xyz, feat, iou_target
     else:
         fg_cr1_index = np.where(iou_target >= config['t_fg_lb'])[0]
@@ -54,9 +52,6 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
         fg_cr2_num = target.shape[0] #M
         iou_pred = np.max(co_iou, axis=0) #(fg_cr2_num,) w.r.t. pred
         iou_pred_index = np.argmax(co_iou, axis=0) #(fg_cr2_num,) pred
-
-        #print("Check2")
-        #print(len(iou_pred), len(pred))
 
         fg_num = fg_cr1_num + fg_cr2_num
 

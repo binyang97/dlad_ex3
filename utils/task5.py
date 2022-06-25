@@ -15,6 +15,12 @@ def nms(pred, score, threshold):
         s_f (M,7) 3D bounding boxes after NMS
         c_f (M,1) corresopnding confidence scores
     '''
+    if len(pred) == 0:
+        print("task5 pred shape", pred.shape)
+        s_f = np.array([]).reshape(-1,7)
+        c_f = np.array([]).reshape(-1,1)
+        return s_f, c_f
+
     s_f = []
     c_f = []
     pred_2d = pred.copy()
@@ -30,15 +36,15 @@ def nms(pred, score, threshold):
         c_f.append(score[i])
         
         mask = np.arange(N) != i
-        pred = pred[mask]
+        pred = pred[mask].reshape(-1,7)
         score = score[mask]
-        pred_2d = pred_2d[mask]
+        pred_2d = pred_2d[mask].reshape(-1,7)
 
         co_iou = get_iou(pred_2d, Di).reshape(-1)
         mask = co_iou<threshold
-        pred = pred[mask]
+        pred = pred[mask].reshape(-1,7)
         score = score[mask]
-        pred_2d = pred_2d[mask]
+        pred_2d = pred_2d[mask].reshape(-1,7)
 
     s_f = np.vstack(s_f)
     c_f = np.array(c_f).reshape(-1,1)

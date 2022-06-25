@@ -34,6 +34,9 @@ def roi_pool(pred, xyz, feat, config):
     valid_pred = pred[valid]
     pooled_xyz = xyz[valid_indices]
     pooled_feat = feat[valid_indices]
+    assert valid_pred.shape == (valid.size, 7)
+    assert pooled_xyz.shape == (valid.size, config['max_points'], 3)
+    assert pooled_feat.shape == (valid.size, config['max_points'], feat.shape[1])
 
     return valid_pred, pooled_xyz, pooled_feat
 
@@ -68,15 +71,15 @@ def points_in_box(xyz, box):
 
     cos_ry = np.cos(ry)
     sin_ry = np.sin(ry)
-    T = [[ cos_ry, 0, sin_ry, x],
+    T = [[cos_ry, 0, sin_ry, x],
         [0,       1, 0,      y],
         [-sin_ry, 0, cos_ry, z]]
     T = np.array(T)
     C = T[:3, :3]
     r = T[:3,  3]
     T_inv = np.zeros((3,4))
-    T_inv[:3,:3] = C.T
-    T_inv[:3, 3] = np.dot(-C.T, r)
+    T_inv[:,:3] = C.T
+    T_inv[:, 3] = np.dot(-C.T, r)
 
     xyz_sub_mask =  (xyz[:,0] >= x-d/2) & (xyz[:,0] <= x+d/2) & \
                     (xyz[:,1] <= y) & (xyz[:,1] >= y-h) & \
@@ -126,8 +129,8 @@ def points_in_boxes(xyz, boxes, max_points):
 def sample_w_padding(indices, num_needed):
     num_elements = indices.size
     if num_elements >= num_needed:
-        return np.random.choice(num_elements, size=num_needed, replace=False)
+        return np.random.choice(indices, size=num_needed, replace=False)
     else:
         choice = indices
-        repeat = np.random.choice(num_elements, size=num_needed-num_elements, replace=True)
+        repeat = np.random.choice(indices, size=num_needed-num_elements, replace=True)
         return np.concatenate((choice, repeat))
