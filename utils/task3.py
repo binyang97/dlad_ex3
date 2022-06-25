@@ -60,8 +60,6 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
 
         fg_num = fg_cr1_num + fg_cr2_num
 
-        #print(fg_num)
-
 
         bg_mask = iou_target < config['t_bg_up']
         bg_easy_mask = iou_target < config['t_bg_hard_lb']
@@ -72,17 +70,17 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
         bg_hard_num = bg_hard_index.size
         bg_num = bg_easy_num + bg_hard_num
 
-        fg_cr1_choice = np.array([], dtype = int)
-        fg_cr2_choice = np.array([], dtype = int)
-        bg_easy_choice = np.array([], dtype = int)
-        bg_hard_choice = np.array([], dtype = int)
+        fg_cr1_choice = np.array([],dtype=int)
+        fg_cr2_choice = np.array([],dtype=int)
+        bg_easy_choice = np.array([],dtype=int)
+        bg_hard_choice = np.array([],dtype=int)
 
         if bg_num == 0:
             fg_cr1_choice, fg_cr2_choice = sample_fg(64, fg_cr1_num, fg_cr2_num)
         elif fg_num == 0:
             bg_easy_choice, bg_hard_choice = sample_bg(64, bg_easy_num, bg_hard_num, config['bg_hard_ratio'])
         else:
-            num_fg_sample = min(fg_num,config['num_fg_sample'])
+            num_fg_sample = min(fg_num, config['num_fg_sample'])
             fg_cr1_choice, fg_cr2_choice = sample_fg(num_fg_sample, fg_cr1_num, fg_cr2_num)
             bg_easy_choice, bg_hard_choice = sample_bg(64-num_fg_sample, bg_easy_num, bg_hard_num, config['bg_hard_ratio'])
         
@@ -101,17 +99,17 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
                               feat[bg_easy_index[bg_easy_choice]],
                               feat[bg_hard_index[bg_hard_choice]]])
 
-        #print(iou_target[fg_cr1_index[fg_cr1_choice]].shape, iou_pred[fg_cr2_choice].shape, iou_target[bg_easy_index[bg_easy_choice]].shape, iou_target[bg_hard_index[bg_hard_choice]].shape)
-        iou_ret = np.hstack([iou_target[fg_cr1_index[fg_cr1_choice]],
-                             iou_pred[fg_cr2_choice],
-                             iou_target[bg_easy_index[bg_easy_choice]],
-                             iou_target[bg_hard_index[bg_hard_choice]]])
-        
+        iou_ret = np.concatenate([iou_target[fg_cr1_index[fg_cr1_choice]],
+                                  iou_pred[fg_cr2_choice],
+                                  iou_target[bg_easy_index[bg_easy_choice]],
+                                  iou_target[bg_hard_index[bg_hard_choice]]]).reshape(-1)
+
+
         # Check 
         assert assigned_targets.shape == (64, 7)
         assert xyz_ret.shape == (64, 512, 3)
         assert feat_ret.shape == (64, 512, feat.shape[2])
-        assert len(iou_ret) == 64
+        assert iou_ret.shape == (64,)
 
         return assigned_targets, xyz_ret, feat_ret, iou_ret
 
@@ -123,8 +121,8 @@ def sample_fg(num_needed, fg_cr1_num, fg_cr2_num):
 
 
 def sample_bg(num_needed, bg_easy_num, bg_hard_num, bg_hard_ratio):
-    bg_easy_choice = np.array([])
-    bg_hard_choice = np.array([])
+    bg_easy_choice = np.array([],dtype=int)
+    bg_hard_choice = np.array([],dtype=int)
 
     if bg_easy_num==0:
         bg_hard_choice = sample_w_padding(bg_hard_num, num_needed)

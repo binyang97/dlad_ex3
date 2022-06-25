@@ -1,23 +1,7 @@
-from cmath import exp
 import numpy as np
-from scipy.spatial import ConvexHull
 from shapely import geometry
 
-def expand_bbox(box, delta):
-    '''
-    expand bounding box with given distance in all directions
-    input (8, 3) corners coordinates
-    '''
-
-    direction = np.sign(box)
-
-    direction[direction == 0] = 1
-    
-    newbox = box + direction * delta
-
-    return newbox
-
-def label2corners(label, expand = False, delta = 1):
+def label2corners(label):
     '''
     Task 1
     input
@@ -44,20 +28,16 @@ def label2corners(label, expand = False, delta = 1):
             |/         |/
             6 -------- 7
         ''' 
-        corner_3d = np.array([[l/2, -h,  w/2],
+        corner_3d = [[l/2, -h,  w/2],
                     [-l/2, -h,  w/2],
                     [-l/2, -h, -w/2],
                     [ l/2, -h, -w/2],
                     [ l/2,  0,  w/2],
                     [-l/2,  0,  w/2],
                     [-l/2,  0, -w/2],
-                    [ l/2,  0, -w/2]])
+                    [ l/2,  0, -w/2]]
 
-        
-        #corner_3d = np.array(corner_3d)
-
-        if expand:
-            corner_3d = expand_bbox(corner_3d, delta = delta)
+        corner_3d = np.array(corner_3d)
         corner_3d = np.hstack([corner_3d, np.ones((8,1))])
         corner_3d = corner_3d.T
 
@@ -121,19 +101,14 @@ def get_iou(pred, target):
             vol2 = box3d_vol(corner_target)
             iou = inter_vol / (vol1 + vol2 - inter_vol)
 
-
             iou_row.append(iou)
 
         IOU.append(iou_row)
 
     IOU = np.array(IOU)
-    
     return IOU
             
-
     
-
-
 def compute_recall(pred, target, threshold):
     '''
     Task 1
@@ -146,10 +121,7 @@ def compute_recall(pred, target, threshold):
     '''
     FN = 0
     TP = 0
-    iou = get_iou(pred, target)
-
-    iou = np.asarray(iou)
-    iou = iou.T
+    iou = get_iou(pred, target).T
     
     for i in range(len(iou)):
         iou_max = np.max(iou[i])

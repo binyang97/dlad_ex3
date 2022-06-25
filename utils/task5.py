@@ -17,30 +17,30 @@ def nms(pred, score, threshold):
     '''
     s_f = []
     c_f = []
+    pred_2d = pred.copy()
+    pred_2d[:,1] = 0
+    pred_2d[:,3] = 1
 
     while pred.shape[0] != 0:
+        N = len(score)
         i = np.argmax(score)
-        Di = pred[i]
+        Di = pred_2d[i].reshape(-1,7)
 
-        s_f.append(Di)
+        s_f.append(pred[i])
         c_f.append(score[i])
-        pred = np.delete(pred, i, axis=0)
-        score = np.delete(score, i)
+        
+        mask = np.arange(N) != i
+        pred = pred[mask]
+        score = score[mask]
+        pred_2d = pred_2d[mask]
 
-        co_iou = get_iou_2d(pred, Di).reshape(-1)
-        pred = pred[co_iou<threshold]
-        score = score[co_iou<threshold]
+        co_iou = get_iou(pred_2d, Di).reshape(-1)
+        mask = co_iou<threshold
+        pred = pred[mask]
+        score = score[mask]
+        pred_2d = pred_2d[mask]
 
     s_f = np.vstack(s_f)
     c_f = np.array(c_f).reshape(-1,1)
 
     return s_f, c_f
-
-def get_iou_2d(pred, target):
-    pred_2d = pred.copy()
-    target_2d = target.copy().reshape(-1,7)
-    pred_2d[:,1] = 0
-    pred_2d[:,3] = 1
-    target_2d[:,1] = 0
-    target_2d[:,3] = 1
-    return get_iou(pred_2d, target_2d)
