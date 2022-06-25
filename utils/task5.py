@@ -16,7 +16,7 @@ def nms(pred, score, threshold):
         c_f (M,1) corresopnding confidence scores
     '''
     if len(pred) == 0:
-        print("task5 pred shape", pred.shape)
+        # print("task5 pred shape", pred.shape)
         s_f = np.array([]).reshape(-1,7)
         c_f = np.array([]).reshape(-1,1)
         return s_f, c_f

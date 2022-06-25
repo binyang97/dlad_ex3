@@ -106,7 +106,7 @@ def get_iou(pred, target):
 
         IOU.append(iou_row)
 
-    IOU = np.array(IOU)
+    IOU = np.array(IOU).reshape(len(pred),len(target))
     return IOU
             
     

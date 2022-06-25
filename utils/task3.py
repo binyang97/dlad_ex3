@@ -38,12 +38,12 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
     iou_target_index = np.argmax(co_iou, axis=1) #(N,)
 
     if not train:
-        assigned_targets = target[iou_target_index] #(N,7)
+        assigned_targets = target[iou_target_index].reshape(-1,7) #(N,7)
 
-        # print("assigned_targets", assigned_targets.shape)
-        # print("xyz", xyz.shape)
-        # print("feat", feat.shape)
-        # print("iou", iou_target.shape)
+        # Check 
+        assert assigned_targets.shape == (len(xyz), 7)
+        assert iou_target.shape == (len(feat),)
+
         return assigned_targets, xyz, feat, iou_target
     else:
         fg_cr1_index = np.where(iou_target >= config['t_fg_lb'])[0]

@@ -34,6 +34,7 @@ def roi_pool(pred, xyz, feat, config):
     valid_pred = pred[valid]
     pooled_xyz = xyz[valid_indices]
     pooled_feat = feat[valid_indices]
+    
     assert valid_pred.shape == (valid.size, 7)
     assert pooled_xyz.shape == (valid.size, config['max_points'], 3)
     assert pooled_feat.shape == (valid.size, config['max_points'], feat.shape[1])
@@ -121,7 +122,7 @@ def points_in_boxes(xyz, boxes, max_points):
             valid_indices.append(valid_index)
             valid.append(i)
 
-    valid_indices = np.array(valid_indices)
+    valid_indices = np.array(valid_indices).reshape(-1, max_points)
     valid = np.array(valid)
 
     return valid_indices, valid
