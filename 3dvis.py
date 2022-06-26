@@ -10,8 +10,10 @@ import os
 #from load_data import load_data
 import yaml
 from dataset import DatasetLoader
-from utils.task2 import roi_pool
 from utils.task1 import label2corners
+from utils.task2 import roi_pool, enlarge_box
+from utils.task3 import sample_proposals
+
 class Visualizer():
     def __init__(self):
         self.canvas = SceneCanvas(keys='interactive', show=True)
@@ -67,45 +69,93 @@ class Visualizer():
                               width=2,
                               color=[0,1,0,1])
 
+def test(label):
+    corners = []
+    for bbox in label:
+        h = bbox[3]
+        w = bbox[4]
+        l = bbox[5]
+        x = bbox[0]
+        y = bbox[1]
+        z = bbox[2]
+        ry = bbox[6]
+
+        '''
+              1 -------- 0
+             /|         /|
+            2 -------- 3 .
+            | |        | |
+            . 5 -------- 4
+            |/         |/
+            6 -------- 7
+        ''' 
+        corner_3d = [[l/2, -h,  w/2],
+                    [-l/2, -h,  w/2],
+                    [-l/2, -h, -w/2],
+                    [ l/2, -h, -w/2],
+                    [ l/2,  0,  w/2],
+                    [-l/2,  0,  w/2],
+                    [-l/2,  0, -w/2],
+                    [ l/2,  0, -w/2]]
+
+        corner_3d = np.array(corner_3d)
+        
+        corners.append(corner_3d)
+
+    return corners
+
 if __name__ == '__main__':
     #data = load_data('data/demo.p') # Change to data.p for your final submission 
 
-    # Visulization for task 2
     visualizer = Visualizer()
     config_path = 'config.yaml'
     config = yaml.safe_load(open(config_path, 'r'))
     ds = DatasetLoader(config['data'], 'minival')
     
+    frame_id = 0
 
-
-    valid_pred, valid_xyz, valid_features = roi_pool(pred=ds.get_data(0, 'detections'),
-									xyz=ds.get_data(0, 'xyz'),
-									feat=ds.get_data(0, 'features'),
+    valid_pred, pooled_xyz, pooled_feat = roi_pool(pred=ds.get_data(frame_id, 'detections'),
+									xyz=ds.get_data(frame_id, 'xyz'),
+									feat=ds.get_data(frame_id, 'features'),
 									config=config['data'])
 
-    #print(isinstance(valid_xyz, np.ndarray))
-    #print(valid_pred.shape)
-    #print(valid_xyz.shape)
+    # box_ind =np.arange(20,41) 
 
-    points = valid_xyz.reshape(-1, valid_xyz.shape[-1])
-    visualizer.update(points)
-    valid_corners = label2corners(valid_pred, expand = True, delta = config['data']['delta'])
-    visualizer.update_boxes(valid_corners)
+    # Visulization for task 2
+    # points = pooled_xyz[box_ind].reshape(-1, pooled_xyz.shape[-1])
+    # visualizer.update(points)
 
+    # valid_corners_org = label2corners(valid_pred)
+    # valid_corners = label2corners(enlarge_box(valid_pred,config['data']['delta']))
 
-    valid_corners_org = label2corners(valid_pred)
-
-    #i = 97
-    #visualizer.update(valid_xyz[i])
-    #visualizer.update_boxes(valid_corners[i])
-    #visualizer.update_boxes(np.vstack([valid_corners[0],valid_corners_org[0]]))
+    # visualizer.update_boxes(valid_corners[box_ind])
+    # visualizer.update_boxes(valid_corners_org[box_ind])
+    #visualizer.update_boxes(np.vstack([valid_corners[i],valid_corners_org[i]]))
     '''
     Task 2: Compute all bounding box corners from given
     annotations. You can visualize the bounding boxes using
     visualizer.update_boxes(corners)
     '''
-    vispy.app.run()
+    # Visulization for task 3
+    targets, xyz, feat, iou = sample_proposals(pred=valid_pred,
+                                                target=ds.get_data(frame_id, 'target'),
+                                                xyz=pooled_xyz,
+                                                feat=pooled_feat,
+                                                config=config['data'],
+                                                train=True,
+                                                )
 
+    points = xyz.reshape(-1, xyz.shape[-1])
+    visualizer.update(points)
+
+    valid_corners = label2corners(valid_pred)
+    visualizer.update_boxes(valid_corners)
+
+    print(valid_corners.shape)
+    print(xyz.shape)
+
+
+    vispy.app.run()
 
     # check
 
@@ -123,6 +173,4 @@ if __name__ == '__main__':
     #     mask = mask_x & mask_y & mask_z
 
     #     print(np.all(mask))
-
-
 
