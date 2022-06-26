@@ -34,6 +34,10 @@ def roi_pool(pred, xyz, feat, config):
     valid_pred = pred[valid]
     pooled_xyz = xyz[valid_indices]
     pooled_feat = feat[valid_indices]
+    
+    assert valid_pred.shape == (valid.size, 7)
+    assert pooled_xyz.shape == (valid.size, config['max_points'], 3)
+    assert pooled_feat.shape == (valid.size, config['max_points'], feat.shape[1])
 
     return valid_pred, pooled_xyz, pooled_feat
 
@@ -64,19 +68,19 @@ def points_in_box(xyz, box):
     y = box[1]
     z = box[2]
     ry = box[6]
-    d = np.sqrt(l**2+w**2) 
+    d = np.sqrt(l**2+w**2)
 
     cos_ry = np.cos(ry)
     sin_ry = np.sin(ry)
-    T = [[ cos_ry, 0, sin_ry, x],
+    T = [[cos_ry, 0, sin_ry, x],
         [0,       1, 0,      y],
         [-sin_ry, 0, cos_ry, z]]
     T = np.array(T)
     C = T[:3, :3]
     r = T[:3,  3]
     T_inv = np.zeros((3,4))
-    T_inv[:3,:3] = C.T
-    T_inv[:3, 3] = np.dot(-C.T, r)
+    T_inv[:,:3] = C.T
+    T_inv[:, 3] = np.dot(-C.T, r)
 
     xyz_sub_mask =  (xyz[:,0] >= x-d/2) & (xyz[:,0] <= x+d/2) & \
                     (xyz[:,1] <= y) & (xyz[:,1] >= y-h) & \
@@ -118,7 +122,7 @@ def points_in_boxes(xyz, boxes, max_points):
             valid_indices.append(valid_index)
             valid.append(i)
 
-    valid_indices = np.array(valid_indices)
+    valid_indices = np.array(valid_indices).reshape(-1, max_points)
     valid = np.array(valid)
 
     return valid_indices, valid

@@ -150,15 +150,10 @@ def train(config, run_name, s3_log_path):
     )
 
     # Log AWS instance information to wandb
-    ec2_hostname = requests.get('http://169.254.169.254/latest/meta-data/public-hostname').text
+    #ec2_hostname = requests.get('http://169.254.169.254/latest/meta-data/public-hostname').text
     ec2_meta = {
-        "EC2_Hostname": ec2_hostname,
-        "EC2_Instance_ID": requests.get('http://169.254.169.254/latest/meta-data/instance-id').text,
-        "EC2_SSH": build_ssh_cmd(ec2_hostname),
-        "EC2_SSH_Tmux": f"{build_ssh_cmd(ec2_hostname)} -t tmux attach-session -t dlad",
-        "EC2_Rsync": build_rsync_cmd(ec2_hostname),
-        "S3_Path": s3_log_path,
-        "S3_Link": f"https://s3.console.aws.amazon.com/s3/buckets/{S3_BUCKET_NAME}?region=us-east-2&prefix={run_name}/",
+        #"S3_Path": s3_log_path,
+        #"S3_Link": f"https://s3.console.aws.amazon.com/s3/buckets/{S3_BUCKET_NAME}?region=us-east-2&prefix={run_name}/",
         "Group_Id": GROUP_ID
     }
     wandb_logger.log_hyperparams({**ec2_meta, **config})

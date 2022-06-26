@@ -53,7 +53,8 @@ def label2corners(label):
         corner_3d = corner_3d.T
         corner_3d = corner_3d[:, :3]
         corners.append(corner_3d)
-    corners = np.array(corners)
+
+    corners = np.array(corners).reshape(-1, 8, 3)
     assert corners.shape == (len(label), 8, 3)
 
     return corners
@@ -105,7 +106,7 @@ def get_iou(pred, target):
 
         IOU.append(iou_row)
 
-    IOU = np.array(IOU)
+    IOU = np.array(IOU).reshape(len(pred),len(target))
     return IOU
             
     
