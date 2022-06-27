@@ -5,7 +5,7 @@
 name: 'default'
 
 data:
-    root_dir: './data' #'/home/ubuntu/dataset'
+    root_dir: '/home/ubuntu/dataset' #'../data' 
     batch_size: 4
     delta: 1.0                  # Task 2a: Extension of the bounding boxes
     max_points: 512             # Task 2b: Maximum points per pooled region

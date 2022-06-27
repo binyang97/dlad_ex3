@@ -119,40 +119,40 @@ if __name__ == '__main__':
 									feat=ds.get_data(frame_id, 'features'),
 									config=config['data'])
 
-    # box_ind =np.arange(20,41) 
+    box_ind =np.arange(0,5) 
 
     # Visulization for task 2
-    # points = pooled_xyz[box_ind].reshape(-1, pooled_xyz.shape[-1])
-    # visualizer.update(points)
+    points = pooled_xyz[box_ind].reshape(-1, pooled_xyz.shape[-1])
+    visualizer.update(points)
 
-    # valid_corners_org = label2corners(valid_pred)
-    # valid_corners = label2corners(enlarge_box(valid_pred,config['data']['delta']))
+    valid_corners_org = label2corners(valid_pred)
+    valid_corners = label2corners(enlarge_box(valid_pred,config['data']['delta']))
 
     # visualizer.update_boxes(valid_corners[box_ind])
     # visualizer.update_boxes(valid_corners_org[box_ind])
-    #visualizer.update_boxes(np.vstack([valid_corners[i],valid_corners_org[i]]))
+    visualizer.update_boxes(np.vstack([valid_corners[box_ind],valid_corners_org[box_ind]]))
     '''
     Task 2: Compute all bounding box corners from given
     annotations. You can visualize the bounding boxes using
     visualizer.update_boxes(corners)
     '''
     # Visulization for task 3
-    targets, xyz, feat, iou = sample_proposals(pred=valid_pred,
-                                                target=ds.get_data(frame_id, 'target'),
-                                                xyz=pooled_xyz,
-                                                feat=pooled_feat,
-                                                config=config['data'],
-                                                train=True,
-                                                )
+    # targets, xyz, feat, iou = sample_proposals(pred=valid_pred,
+    #                                             target=ds.get_data(frame_id, 'target'),
+    #                                             xyz=pooled_xyz,
+    #                                             feat=pooled_feat,
+    #                                             config=config['data'],
+    #                                             train=True,
+    #                                             )
 
-    points = xyz.reshape(-1, xyz.shape[-1])
-    visualizer.update(points)
+    # points = xyz.reshape(-1, xyz.shape[-1])
+    # visualizer.update(points)
 
-    valid_corners = label2corners(valid_pred)
-    visualizer.update_boxes(valid_corners)
+    # valid_corners = label2corners(valid_pred)
+    # visualizer.update_boxes(valid_corners)
 
-    print(valid_corners.shape)
-    print(xyz.shape)
+    # print(valid_corners.shape)
+    # print(xyz.shape)
 
 
     vispy.app.run()

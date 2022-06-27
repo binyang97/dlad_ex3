@@ -51,6 +51,7 @@ def enlarge_box(box, extention):
     '''
     enlarged_box = box.copy()
     enlarged_box[:, 3:6] += 2 * extention
+    enlarged_box[:, 1] += extention
     return enlarged_box
 
 def points_in_box(xyz, box):
