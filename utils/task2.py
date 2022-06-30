@@ -146,35 +146,3 @@ def sample_w_padding(indices, num_needed):
         choice = indices
         repeat = np.random.choice(indices, size=num_needed-num_elements, replace=True)
         return np.concatenate((choice, repeat))
-
-
-
-def voxelization(proposals, xyzs, feats, config, T = 35):
-        # shuffling the points
-        #np.random.shuffle(xyz)
-        voxel_coords = []
-        voxel_features = []
-        enlarged_proposals = enlarge_box(proposals, config['delta'])
-        for (p, proposal) in enumerate(enlarged_proposals):
-
-            h, w, l = proposal[3], proposal[4], proposal[5]
-            feat = feats[p]
-            xyz = xyzs[p]
-
-            voxel_coord = [[l*i/6 + l/12, -h*j/6-h/12, w*k/6 + w/12] for i in range(-3, 3) for j in range(6) for k in range(-3, 3)]
-
-            
-            voxel_feature = [] #np.zeros((num_voxels, T, feat.shape[1]+3))
-            # count = np.zeros(num_voxels, dtype = int)
-            for (i, point) in enumerate(xyz):
-        
-                dist2voxel = np.linalg.norm(voxel_coord - point, axis = 1)
-
-                selected_voxel_coord = np.argmin(dist2voxel)
-                if count[selected_voxel_coord] < T:
-                    voxel_feature[selected_voxel_coord, count[selected_voxel_coord]] =  np.hstack((feat[i], point))
-                    count[selected_voxel_coord] += 1
-            
-            voxel_coords.append(voxel_coord)
-            voxel_features.append(voxel_feature)
-        return np.array(voxel_coords), np.array(voxel_features)

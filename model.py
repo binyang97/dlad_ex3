@@ -33,6 +33,23 @@ class Model(nn.Module):
 
         channel_in = self.max_num_voxels * self.num_point_features
 
+        # Middle layer
+        mid_layers = []
+        pre_channel = channel_in
+        for k in range(len(self.mid_fc)):
+            mid_layers.extend([
+                nn.Conv1d(pre_channel, self.mid_fc[k], kernel_size=1),
+                nn.ReLU(inplace=True)
+            ])
+            pre_channel = self.mid_fc[k]
+        mid_layers.extend([
+            nn.Conv1d(pre_channel, 1, kernel_size=1),
+            nn.Sigmoid()
+        ])
+        self.mid_layers = nn.Sequential(*mid_layers)
+
+        channel_in = self.mid_fc[-1]
+
         # Classification head
         cls_layers = []
         pre_channel = channel_in
@@ -69,6 +86,8 @@ class Model(nn.Module):
         #     xyz, feat = layer(xyz, feat)
 
         feat = self.SVFE(x)
+
+        feat = self.mid_layers(feat)
             
         pred_class = self.cls_layers(feat).squeeze(dim=-1)  # (B,1)
         pred_box = self.det_layers(feat).squeeze(dim=-1)    # (B,7)
