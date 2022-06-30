@@ -8,6 +8,5 @@ aws_configs/group_id.txt
 *warmed_up
 data/
 report/
-config.yaml
 tests/test*
 code*
