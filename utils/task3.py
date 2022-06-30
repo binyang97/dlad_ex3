@@ -1,5 +1,3 @@
-from dataclasses import replace
-from secrets import choice
 import numpy as np
 
 from .task1 import get_iou
@@ -39,14 +37,14 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
     iou_target = np.max(co_iou, axis=1) #(N,)
     iou_target_index = np.argmax(co_iou, axis=1) #(N,)
 
-    # check
-    #print("Check1")
-    #print(len(iou_target_index))
-    #print(len(target))
-
     if not train:
-        assigned_targets = target[iou_target_index] #(N,7)
-        return assigned_targets, xyz, feat, iou_target
+        assigned_targets = target[iou_target_index].reshape(-1,7) #(N,7)
+
+        # Check 
+        assert assigned_targets.shape == (len(xyz), 7)
+        assert iou_target.shape == (len(feat),)
+
+        return assigned_targets, xyz, feat, iou_target, pred
     else:
         fg_cr1_index = np.where(iou_target >= config['t_fg_lb'])[0]
         fg_cr1_num = fg_cr1_index.size
@@ -54,9 +52,6 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
         fg_cr2_num = target.shape[0] #M
         iou_pred = np.max(co_iou, axis=0) #(fg_cr2_num,) w.r.t. pred
         iou_pred_index = np.argmax(co_iou, axis=0) #(fg_cr2_num,) pred
-
-        #print("Check2")
-        #print(len(iou_pred), len(pred))
 
         fg_num = fg_cr1_num + fg_cr2_num
 
@@ -104,14 +99,19 @@ def sample_proposals(pred, target, xyz, feat, config, train=False):
                                   iou_target[bg_easy_index[bg_easy_choice]],
                                   iou_target[bg_hard_index[bg_hard_choice]]]).reshape(-1)
 
+        pred_ret = np.vstack([pred[fg_cr1_index[fg_cr1_choice]],
+                              pred[iou_pred_index[fg_cr2_choice]],
+                              pred[bg_easy_index[bg_easy_choice]],
+                              pred[bg_hard_index[bg_hard_choice]]])
 
         # Check 
         assert assigned_targets.shape == (64, 7)
         assert xyz_ret.shape == (64, 512, 3)
         assert feat_ret.shape == (64, 512, feat.shape[2])
         assert iou_ret.shape == (64,)
+        assert pred_ret.shape == (64, 7)
 
-        return assigned_targets, xyz_ret, feat_ret, iou_ret
+        return assigned_targets, xyz_ret, feat_ret, iou_ret, pred_ret
 
 def sample_fg(num_needed, fg_cr1_num, fg_cr2_num):
     choice = sample_w_padding(fg_cr1_num+fg_cr2_num, num_needed)

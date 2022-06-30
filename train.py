@@ -93,7 +93,7 @@ class LitModel(pl.LightningModule):
         generate_submission(os.path.join(self.output_dir, 'test'), self.submission_file)
 
     def configure_optimizers(self):
-        optimizer = optim.SGD(self.parameters(), **self.config['optimizer'])
+        optimizer = optim.Adam(self.parameters(), **self.config['optimizer'])
         scheduler = lrs.MultiStepLR(optimizer, **self.config['scheduler'])
         return [optimizer], [scheduler]
 

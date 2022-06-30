@@ -2,7 +2,7 @@ from logging.config import valid_ident
 import numpy as np
 from timeit import default_timer as timer
 
-def roi_pool(pred, xyz, feat, config):
+def roi_pool(pred, xyz, feat, config, canonical = False):
     '''
     Task 2
     a. Enlarge predicted 3D bounding boxes by delta=1.0 meters in all directions.
@@ -30,10 +30,21 @@ def roi_pool(pred, xyz, feat, config):
         config['max_points'] number of points in the final sampled ROI
     '''
     enlarged_pred = enlarge_box(pred, config['delta'])
-    valid_indices, valid = points_in_boxes(xyz, enlarged_pred, config['max_points'])
+    valid_indices, valid, inv_matrix = points_in_boxes(xyz, enlarged_pred, config['max_points'])
     valid_pred = pred[valid]
     pooled_xyz = xyz[valid_indices]
+
+    if canonical: 
+        for (i, xyz_global) in enumerate(pooled_xyz):
+            xyz_canonical = inv_matrix[i] @ np.hstack([xyz_global, np.ones((len(xyz_global),1))]).T
+            xyz_canonical = xyz_canonical.T[:,:3]
+            pooled_xyz[i] = xyz_canonical
+
     pooled_feat = feat[valid_indices]
+    
+    assert valid_pred.shape == (valid.size, 7)
+    assert pooled_xyz.shape == (valid.size, config['max_points'], 3)
+    assert pooled_feat.shape == (valid.size, config['max_points'], feat.shape[1])
 
     return valid_pred, pooled_xyz, pooled_feat
 
@@ -47,6 +58,8 @@ def enlarge_box(box, extention):
     '''
     enlarged_box = box.copy()
     enlarged_box[:, 3:6] += 2 * extention
+
+    enlarged_box[:, 1] += extention
     return enlarged_box
 
 def points_in_box(xyz, box):
@@ -64,19 +77,19 @@ def points_in_box(xyz, box):
     y = box[1]
     z = box[2]
     ry = box[6]
-    d = np.sqrt(l**2+w**2) 
+    d = np.sqrt(l**2+w**2)
 
     cos_ry = np.cos(ry)
     sin_ry = np.sin(ry)
-    T = [[ cos_ry, 0, sin_ry, x],
+    T = [[cos_ry, 0, sin_ry, x],
         [0,       1, 0,      y],
         [-sin_ry, 0, cos_ry, z]]
     T = np.array(T)
     C = T[:3, :3]
     r = T[:3,  3]
     T_inv = np.zeros((3,4))
-    T_inv[:3,:3] = C.T
-    T_inv[:3, 3] = np.dot(-C.T, r)
+    T_inv[:,:3] = C.T
+    T_inv[:, 3] = np.dot(-C.T, r)
 
     xyz_sub_mask =  (xyz[:,0] >= x-d/2) & (xyz[:,0] <= x+d/2) & \
                     (xyz[:,1] <= y) & (xyz[:,1] >= y-h) & \
@@ -94,8 +107,9 @@ def points_in_box(xyz, box):
                      (xyz_prime[:,2] >= -w/2) & (xyz_prime[:,2] <= w/2)
 
     xyz_index = xyz_sub_index[xyz_prime_mask]
+   #xyz_local = xyz_prime[xyz_prime_mask]
 
-    return xyz_index
+    return xyz_index, T_inv
 
 
 def points_in_boxes(xyz, boxes, max_points):
@@ -110,18 +124,19 @@ def points_in_boxes(xyz, boxes, max_points):
     '''
     valid_indices = []
     valid = []
+    tran_inv = []
     for (i, box) in enumerate(boxes):
-        xyz_index = points_in_box(xyz, box)
-
+        xyz_index, inv_matrix = points_in_box(xyz, box)
         if len(xyz_index) > 0:
             valid_index = sample_w_padding(xyz_index, max_points)
             valid_indices.append(valid_index)
             valid.append(i)
-
-    valid_indices = np.array(valid_indices)
+            tran_inv.append(inv_matrix)
+    valid_indices = np.array(valid_indices).reshape(-1, max_points)
     valid = np.array(valid)
+    tran_inv = np.array(tran_inv)
 
-    return valid_indices, valid
+    return valid_indices, valid, tran_inv
 
 def sample_w_padding(indices, num_needed):
     num_elements = indices.size

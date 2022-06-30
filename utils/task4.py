@@ -1,7 +1,15 @@
-
-
 import torch
 import torch.nn as nn
+from utils.task1 import label2corners
+import numpy as np
+
+def huber_loss(error, delta):
+    abs_error = torch.abs(error)
+    quadratic = np.minimum(abs_error, delta)
+    linear = (abs_error - quadratic)
+    losses = 0.5 * quadratic**2 + delta * linear
+    return losses
+
 
 class RegressionLoss(nn.Module):
     def __init__(self, config):
@@ -25,12 +33,24 @@ class RegressionLoss(nn.Module):
             self.config['positive_reg_lb'] lower bound for positive samples
         '''
         mask = iou >= self.config['positive_reg_lb']
-        pred = pred[mask]
-        target = target[mask]
-        loss_loc = self.loss(pred[:,:3], target[:,:3])
-        loss_size = self.loss(pred[:,3:6], target[:,3:6])
-        loss_rot = self.loss(pred[:,6], target[:,6])
-        return loss_loc + 3*loss_size + loss_rot
+        if torch.sum(mask) != 0:
+            pred_valid = pred[mask]
+            target_valid = target[mask]
+        else:
+            pred_valid = 0 * pred
+            target_valid = 0 * target
+        loss_loc = self.loss(pred_valid[:,:3], target_valid[:,:3])
+        loss_size = self.loss(pred_valid[:,3:6], target_valid[:,3:6])
+        loss_rot = self.loss(pred_valid[:,6], target_valid[:,6])
+        loss = loss_loc + 3*loss_size + loss_rot
+
+        if self.config['use_corner_loss']:
+            pred_corners = label2corners(pred_valid)
+            target_corners = label2corners(target_valid)
+            loss_corner = huber_loss(pred_corners - target_corners, self.config['huber_delta'])
+            loss = loss + loss_corner
+        # print("task4 reg_loss", loss)
+        return loss
 
 class ClassificationLoss(nn.Module):
     def __init__(self, config):

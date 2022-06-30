@@ -10,6 +10,7 @@ import h5py
 
 from utils.task2 import roi_pool
 from utils.task3 import sample_proposals
+from utils.voxel import voxelization
 
 class DatasetLoader(Dataset):
     def __init__(self, config, split):
@@ -29,22 +30,43 @@ class DatasetLoader(Dataset):
     def __getitem__(self, idx):
         frame = self.frames[idx]
         points = self.get_data(idx, 'xyz')
+        feat = self.get_data(idx, 'features')
+        if self.config['seg_label'] != 0:
+            seg_label = self.get_data(idx, 'seg').reshape(-1,1)
+            feat = np.concatenate([feat, seg_label], -1)
+        if self.config['intensity'] != 0:
+            intensity = self.get_data(idx, 'intensity').reshape(-1,1)
+            feat = np.concatenate([feat, intensity], -1)
+
         valid_pred, pooled_xyz, pooled_feat = roi_pool(pred=self.get_data(idx, 'detections'),
                                                        xyz=points,
-                                                       feat=self.get_data(idx, 'features'),
-                                                       config=self.config)
+                                                       feat=feat,
+                                                       config=self.config,
+                                                       canonical=True)
+
         if self.split == 'test':
-            return {'frame': frame, 'input': np.concatenate((pooled_xyz, pooled_feat),-1)}
+            voxels, voxel_coords = voxelization(proposals=valid_pred,
+                                                xyzs=pooled_xyz,
+                                                feats=pooled_feat,
+                                                config=self.config)
+            return {'frame': frame, 'input': voxels}
 
         target = self.get_data(idx, 'target')
-        assinged_target, xyz, feat, iou = sample_proposals(pred=valid_pred,
-                                                           target=target,
-                                                           xyz=pooled_xyz,
-                                                           feat=pooled_feat,
-                                                           config=self.config,
-                                                           train=self.split=='train')
+        assinged_target, xyz, feat, iou, pred = sample_proposals(pred=valid_pred,
+                                                                 target=target,
+                                                                 xyz=pooled_xyz,
+                                                                 feat=pooled_feat,
+                                                                 config=self.config,
+                                                                 train=self.split=='train')
+
+        voxels, voxel_coords = voxelization(proposals=pred,
+                                            xyzs=xyz,
+                                            feats=feat,
+                                            config=self.config)
+
         sampled_frame = {
-            'input': np.concatenate((xyz, feat),-1),
+            # 'input': np.concatenate((xyz, feat),-1),
+            'input': voxels,
             'assinged_target': assinged_target,
             'iou': iou
         }
@@ -106,6 +128,8 @@ class DatasetLoader(Dataset):
         '''
         batch_size = batch.__len__()
         ans_dict = batch[0]
+        # for b in range(1,batch_size):
+        #     batch[b]['voxel_coords'][:,0] += np.sum([batch[b_id]['voxel_coords'].shape[0] for b_id in range(b)])
         for key in ans_dict.keys():
             for b in range(1,batch_size):
                 ans_dict[key] = np.concatenate((ans_dict[key], batch[b][key]),0,dtype=np.float32)
