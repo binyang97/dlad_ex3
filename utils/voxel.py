@@ -125,26 +125,8 @@ class SVFE(nn.Module):
         assert x.shape == (x.size(0), self.max_num_voxels * self.num_point_features)
         return x
 
-class VFETemplate(nn.Module):
-    def __init__(self, model_cfg, **kwargs):
-        super().__init__()
-        self.model_cfg = model_cfg
 
-    def get_output_feature_dim(self):
-        raise NotImplementedError
-
-    def forward(self, **kwargs):
-        """
-        Args:
-            **kwargs:
-        Returns:
-            batch_dict:
-                ...
-                vfe_features: (num_voxels, C)
-        """
-        raise NotImplementedError
-
-class MeanVFE(VFETemplate):
+class MeanVFE(nn.Module):
     def __init__(self, config):
         super(MeanVFE, self).__init__()
         self.__dict__.update(config)

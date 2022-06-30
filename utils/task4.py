@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from utils.task1 import label2corners
 import numpy as np
+import torch.nn.functional as F
 
 def huber_loss(error, delta):
     abs_error = torch.abs(error)
@@ -16,7 +17,7 @@ class RegressionLoss(nn.Module):
         super().__init__()
         self.config = config
         self.loss = nn.SmoothL1Loss()
-        self.huber_loss = nn.HuberLoss(reduction='mean', delta = self.config['huber_delta'])
+        #self.huber_loss = nn.HuberLoss(reduction='mean', delta = self.config['huber_delta'])
 
     def forward(self, pred, target, iou):
         '''
@@ -48,7 +49,8 @@ class RegressionLoss(nn.Module):
         if self.config['use_corner_loss']:
             pred_corners = label2corners(pred_valid)
             target_corners = label2corners(target_valid)
-            loss_corner = self.huber_loss(pred_corners - target_corners)
+            #loss_corner = self.huber_loss(pred_corners - target_corners)
+            loss_corner = F.huber_loss(pred_corners, target_corners)
             loss = loss + loss_corner
         # print("task4 reg_loss", loss)
         return loss
