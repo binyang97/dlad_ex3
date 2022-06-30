@@ -3,6 +3,7 @@ __pycache__
 wandb
 *.log
 *.key
+*.ipynb
 aws_configs/default_s3_bucket.txt
 aws_configs/group_id.txt
 *warmed_up
