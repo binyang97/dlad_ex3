@@ -44,7 +44,7 @@ def voxelization(proposals, xyzs, feats, config):
         selected_voxel_coord = voxel_idx[np.argmin(dist2voxel, axis = 1)]
                 
         for point_idx, voxel_idx in enumerate(selected_voxel_coord):
-            if count[voxel_idx] < T:
+            if count[voxel_idx] < config['max_num_points_per_voxel']:
                 
                 voxel_feature[voxel_idx, count[voxel_idx]] = np.hstack((feat[point_idx], xyz[point_idx]))
                 count[voxel_idx] += 1
@@ -66,10 +66,11 @@ class FCN(nn.Module):
 
     def forward(self,x):
         # KK is the stacked k across batch
-        kk, t, _ = x.shape
-        x = self.linear(x.view(kk*t,-1))
+        d, kk, t, _ = x.shape
+        x = self.linear(x)
+        x = x.view(d*kk*t,-1)
         x = F.relu(self.bn(x))
-        return x.view(kk,t,-1)
+        return x.view(d,kk,t,-1)
 
 # Voxel Feature Encoding layer
 class VFE(nn.Module):
@@ -84,11 +85,11 @@ class VFE(nn.Module):
         # point-wise feauture
         pwf = self.fcn(x)
         #locally aggregated feature
-        laf = torch.max(pwf,1)[0].unsqueeze(1).repeat(1,self.T,1)
+        laf = torch.max(pwf,2)[0].unsqueeze(2).repeat(1,1,self.T,1)
         # point-wise concat feature
-        pwcf = torch.cat((pwf,laf),dim=2)
+        pwcf = torch.cat((pwf,laf),dim=3)
         # apply mask
-        mask = mask.unsqueeze(2).repeat(1, 1, self.units * 2)
+        mask = mask.unsqueeze(3).repeat(1, 1, 1, self.units * 2)
         pwcf = pwcf * mask.float()
 
         return pwcf
@@ -108,14 +109,14 @@ class SVFE(nn.Module):
         self.fcn = FCN(channel_in,channel_in)
 
     def forward(self, x):
-        mask = torch.ne(torch.max(x,2)[0], 0)
+        mask = torch.ne(torch.max(x,3)[0], 0)
 
         for layer in self.vfes:
             x = layer(x, mask)
 
         x = self.fcn(x)
         # element-wise max pooling
-        x = torch.max(x,1)[0].reshape(x.size(0), -1)
+        x = torch.max(x,2)[0].view(x.size(0), -1)
 
         assert x.shape == (x.size(0), self.max_num_voxels * self.num_point_features)
         return x

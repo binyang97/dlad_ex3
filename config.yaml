@@ -16,6 +16,12 @@ data:
     t_bg_hard_lb: 0.05          # Task 3b: Background hard sample iou lower bound
     t_bg_up: 0.45               # Task 3b: Background sample iou upper bound
 
+    seg_label: 0
+    intensity: 0
+
+    max_num_points_per_voxel: 35
+    max_num_voxels: 216
+
 model:
     channel_in: 128
     npoint: [128, 32, -1]
@@ -28,16 +34,11 @@ model:
     reg_fc: [256, 256]
     mid_fc: [512, 512]
 
-voxel:
     vfe_fc: [128, 128, 256]
     grid_size: [6,6,6]
     num_point_features: 131
     max_num_points_per_voxel: 35
     max_num_voxels: 216
-
-feature:
-    seg_label: 0
-    intensity: 0
 
 optimizer:
     lr: 0.001
