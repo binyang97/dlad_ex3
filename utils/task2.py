@@ -2,7 +2,7 @@ from logging.config import valid_ident
 import numpy as np
 from timeit import default_timer as timer
 
-def roi_pool(pred, xyz, feat, config):
+def roi_pool(pred, xyz, feat, config, canonical = False):
     '''
     Task 2
     a. Enlarge predicted 3D bounding boxes by delta=1.0 meters in all directions.
@@ -30,9 +30,16 @@ def roi_pool(pred, xyz, feat, config):
         config['max_points'] number of points in the final sampled ROI
     '''
     enlarged_pred = enlarge_box(pred, config['delta'])
-    valid_indices, valid = points_in_boxes(xyz, enlarged_pred, config['max_points'])
+    valid_indices, valid, inv_matrix = points_in_boxes(xyz, enlarged_pred, config['max_points'])
     valid_pred = pred[valid]
     pooled_xyz = xyz[valid_indices]
+
+    if canonical: 
+        for (i, xyz_global) in enumerate(pooled_xyz):
+            xyz_canonical = inv_matrix[i] @ np.hstack([xyz_global, np.ones((len(xyz_global),1))]).T
+            xyz_canonical = xyz_canonical.T[:,:3]
+            pooled_xyz[i] = xyz_canonical
+
     pooled_feat = feat[valid_indices]
     
     assert valid_pred.shape == (valid.size, 7)
@@ -51,6 +58,7 @@ def enlarge_box(box, extention):
     '''
     enlarged_box = box.copy()
     enlarged_box[:, 3:6] += 2 * extention
+
     enlarged_box[:, 1] += extention
     return enlarged_box
 
@@ -99,8 +107,9 @@ def points_in_box(xyz, box):
                      (xyz_prime[:,2] >= -w/2) & (xyz_prime[:,2] <= w/2)
 
     xyz_index = xyz_sub_index[xyz_prime_mask]
+   #xyz_local = xyz_prime[xyz_prime_mask]
 
-    return xyz_index
+    return xyz_index, T_inv
 
 
 def points_in_boxes(xyz, boxes, max_points):
@@ -115,18 +124,19 @@ def points_in_boxes(xyz, boxes, max_points):
     '''
     valid_indices = []
     valid = []
+    tran_inv = []
     for (i, box) in enumerate(boxes):
-        xyz_index = points_in_box(xyz, box)
-
+        xyz_index, inv_matrix = points_in_box(xyz, box)
         if len(xyz_index) > 0:
             valid_index = sample_w_padding(xyz_index, max_points)
             valid_indices.append(valid_index)
             valid.append(i)
-
+            tran_inv.append(inv_matrix)
     valid_indices = np.array(valid_indices).reshape(-1, max_points)
     valid = np.array(valid)
+    tran_inv = np.array(tran_inv)
 
-    return valid_indices, valid
+    return valid_indices, valid, tran_inv
 
 def sample_w_padding(indices, num_needed):
     num_elements = indices.size
@@ -136,3 +146,35 @@ def sample_w_padding(indices, num_needed):
         choice = indices
         repeat = np.random.choice(indices, size=num_needed-num_elements, replace=True)
         return np.concatenate((choice, repeat))
+
+
+
+def voxelization(proposals, xyzs, feats, config, T = 35):
+        # shuffling the points
+        #np.random.shuffle(xyz)
+        voxel_coords = []
+        voxel_features = []
+        enlarged_proposals = enlarge_box(proposals, config['delta'])
+        for (p, proposal) in enumerate(enlarged_proposals):
+
+            h, w, l = proposal[3], proposal[4], proposal[5]
+            feat = feats[p]
+            xyz = xyzs[p]
+
+            voxel_coord = [[l*i/6 + l/12, -h*j/6-h/12, w*k/6 + w/12] for i in range(-3, 3) for j in range(6) for k in range(-3, 3)]
+
+            
+            voxel_feature = [] #np.zeros((num_voxels, T, feat.shape[1]+3))
+            # count = np.zeros(num_voxels, dtype = int)
+            for (i, point) in enumerate(xyz):
+        
+                dist2voxel = np.linalg.norm(voxel_coord - point, axis = 1)
+
+                selected_voxel_coord = np.argmin(dist2voxel)
+                if count[selected_voxel_coord] < T:
+                    voxel_feature[selected_voxel_coord, count[selected_voxel_coord]] =  np.hstack((feat[i], point))
+                    count[selected_voxel_coord] += 1
+            
+            voxel_coords.append(voxel_coord)
+            voxel_features.append(voxel_feature)
+        return np.array(voxel_coords), np.array(voxel_features)

@@ -6,28 +6,32 @@ import torch
 import torch.nn as nn
 from pointnet2_ops.pointnet2_modules import PointnetSAModule
 
+from utils.voxel import SVFE
+
 class Model(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.__dict__.update(config)
 
         # Encoder
-        channel_in = self.channel_in
-        self.set_abstraction = nn.ModuleList()
-        for k in range(len(self.npoint)):
-            mlps = [channel_in] + self.mlps[k]
-            npoint = self.npoint[k] if self.npoint[k]!=-1 else None
-            self.set_abstraction.append(
-                    PointnetSAModule(
-                        npoint=npoint,
-                        radius=self.radius[k],
-                        nsample=self.nsample[k],
-                        mlp=self.mlps[k],
-                        use_xyz=True,
-                        bn=False
-                    )
-                )
-            channel_in = mlps[-1]
+        # self.set_abstraction = nn.ModuleList()
+        # for k in range(len(self.npoint)):
+        #     mlps = [channel_in] + self.mlps[k]
+        #     npoint = self.npoint[k] if self.npoint[k]!=-1 else None
+        #     self.set_abstraction.append(
+        #             PointnetSAModule(
+        #                 npoint=npoint,
+        #                 radius=self.radius[k],
+        #                 nsample=self.nsample[k],
+        #                 mlp=self.mlps[k],
+        #                 use_xyz=True,
+        #                 bn=False
+        #             )
+        #         )
+        #     channel_in = mlps[-1]
+        self.SVFE = SVFE(config)
+
+        channel_in = self.max_num_voxels * self.num_point_features
 
         # Classification head
         cls_layers = []
@@ -57,11 +61,14 @@ class Model(nn.Module):
         self.det_layers = nn.Sequential(*det_layers)
 
     def forward(self, x):
-        xyz = x[..., 0:3].contiguous()                      # (B,N,3)    
-        feat = x[..., 3:].transpose(1, 2).contiguous()      # (B,C,N)
+        # xyz = x[..., 0:3].contiguous()                      # (B,N,3)    
+        # feat = x[..., 3:].transpose(1, 2).contiguous()      # (B,C,N)
+        x = x.contiguous()      # (B,216,35,C)
 
-        for layer in self.set_abstraction:
-            xyz, feat = layer(xyz, feat)
+        # for layer in self.set_abstraction:
+        #     xyz, feat = layer(xyz, feat)
+
+        feat = self.SVFE(x)
             
         pred_class = self.cls_layers(feat).squeeze(dim=-1)  # (B,1)
         pred_box = self.det_layers(feat).squeeze(dim=-1)    # (B,7)
