@@ -16,14 +16,14 @@ data:
     t_bg_hard_lb: 0.05          # Task 3b: Background hard sample iou lower bound
     t_bg_up: 0.45               # Task 3b: Background sample iou upper bound
 
-    seg_label: True
-    intensity: True
+    seg_label: False
+    intensity: False
 
     max_num_points_per_voxel: 35
     max_num_voxels: 64 # voxel_grid_size^3
     voxel_grid_size: 4
     use_ccs: False
-    use_voxel: False # in accordance with encoder
+    use_voxel: True # in accordance with encoder
 
 
 model:
@@ -40,10 +40,11 @@ model:
     mid_fc: [256, 256]
     vfe_fc: [128, 128, 256]
     grid_size: [6,6,6]
-    num_point_features: 133 # 128 + xyz, if use seman and intensities,this value should be 133
+    num_point_features: 131 # 128 + xyz, if use seman and intensities,this value should be 133
     max_num_points_per_voxel: 35 # same as data
     max_num_voxels: 64 # same as data
-    encoder: 'original' # ['mvfe', 'svfe', 'original']
+    voxel_grid_size: 4
+    encoder: 'mvfe' # ['mvfe', 'svfe', 'original']
     use_dir_cls: False # same as loss
 
 optimizer:
@@ -75,5 +76,5 @@ trainer:
     resume_from_checkpoint: 
     num_sanity_val_steps: 0
     # Uncomment the following options if you want to try out framework changes without training too long
-    limit_train_batches: 1000
+    limit_train_batches: 10
     # log_every_n_steps: 5

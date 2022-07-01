@@ -15,7 +15,6 @@ def compute_inv_matrix(box):
     y = box[1]
     z = box[2]
     ry = box[6]
-    d = np.sqrt(l**2+w**2)
 
     cos_ry = np.cos(ry)
     sin_ry = np.sin(ry)
@@ -85,6 +84,90 @@ def voxelization(proposals, xyzs, feats, config):
         voxel_features.append(voxel_feature)
 
     return np.array(voxel_features)
+
+
+class Voxelization(nn.Module):
+    def __init__(self,config):
+        super(Voxelization, self).__init__()
+        self.config = config
+
+    def compute_inv_matrix(self, box):
+        h = box[3]
+        w = box[4]
+        l = box[5]
+        x = box[0]
+        y = box[1]
+        z = box[2]
+        ry = box[6]
+
+        cos_ry = torch.cos(ry)
+        sin_ry = torch.sin(ry)
+        T = torch.Tensor([[cos_ry, 0, sin_ry, x],
+                        [0,       1, 0,      y],
+                        [-sin_ry, 0, cos_ry, z]])
+        C = T[:3, :3]
+        r = T[:3,  3]
+        T_inv = torch.zeros((3,4))
+        T_inv[:,:3] = C.t()
+        T_inv[:, 3] = torch.matmul(-C.t(), r)
+
+        return T_inv
+
+    def forward(self, x):
+        proposals = x['proposal'] 
+        xyzs, feats = x['xyz_feat'][..., :3], x['xyz_feat'][...,3:]
+        voxel_features = []
+        enlarged_proposals = enlarge_box(proposals, self.config['delta'])
+        voxel_size = self.config['voxel_grid_size']
+        for (p, proposal) in enumerate(enlarged_proposals):
+            h, w, l = proposal[3], proposal[4], proposal[5]
+            feat = feats[p]
+            xyz_global = xyzs[p]
+
+            T_inv = self.compute_inv_matrix(proposal)
+            corner_3d = torch.cat((corner_3d, torch.ones((8,1))), dim = 1)
+            xyz_global_homo = torch.cat((xyz_global, torch.ones((len(xyz_global),1)))).t()
+            xyz_canonical =  torch.matmul(T_inv, xyz_global_homo).t()
+            xyz = xyz_canonical[:, :3]
+
+            voxel_coord = torch.Tensor([[l*i/voxel_size + l/(voxel_size*2), -h*j/voxel_size-h/(voxel_size*2), w*k/voxel_size + w/(voxel_size*2)] \
+                                    for i in range(-int(voxel_size/2), int(voxel_size/2)) for j in range(voxel_size) for k in range(-int(voxel_size/2), int(voxel_size/2))])
+
+            xmax = torch.max(xyz[:,0]) + l/(voxel_size*2)
+            xmin = torch.min(xyz[:,0]) - l/(voxel_size*2)
+            ymax = torch.max(xyz[:,1]) + h/(voxel_size*2)
+            ymin = torch.min(xyz[:,1]) - h/(voxel_size*2)
+            zmax = torch.max(xyz[:,2]) + w/(voxel_size*2)
+            zmin = torch.min(xyz[:,2]) - w/(voxel_size*2)
+
+            voxel_mask = (voxel_coord[:,0]>xmin) & (voxel_coord[:,0]<xmax) & \
+                        (voxel_coord[:,1]>ymin) & (voxel_coord[:,1]<ymax)& \
+                        (voxel_coord[:,2]>zmin) & (voxel_coord[:,2]<zmax)
+
+            voxel_idx = torch.where(voxel_mask)
+            
+
+            voxel_coord_filtered = voxel_coord[voxel_idx]
+
+            voxel_feature = torch.zeros((self.config['max_num_voxels'], self.config['max_num_points_per_voxel'], feat.shape[1]+3))
+            count = torch.zeros(self.config['max_num_voxels'], dtype = int)
+
+            dist2voxel = torch.stack([torch.norm(voxel_coord_filtered - point, dim = 1) for point in xyz]) 
+
+            selected_voxel_coord = voxel_idx[torch.argmin(dist2voxel, dim = 1)]
+                    
+            for point_idx, voxel_idx in enumerate(selected_voxel_coord):
+                if count[voxel_idx] < self.config['max_num_points_per_voxel']:
+                    
+                    voxel_feature[voxel_idx, count[voxel_idx]] = torch.cat((feat[point_idx], xyz_global[point_idx]))
+                    count[voxel_idx] += 1
+            
+
+            #voxel_coords.append(voxel_coord)
+            voxel_features.append(voxel_feature)
+
+        return torch.stack((voxel_features))
+
 
 
 # Fully Connected Network
@@ -201,8 +284,6 @@ class MeanVFE(nn.Module):
         voxel_features = voxel_features.reshape(batch_size, -1, 1)
 
         return voxel_features
-
-
 
 # tv = None
 # try:
