@@ -149,11 +149,29 @@ class SVFE(nn.Module):
 
         x = self.fcn(x)
         # element-wise max pooling
-        x = torch.max(x,1)[0].reshape(x.size(0), -1)
+        x = torch.max(x,2)[0].reshape(x.size(0), -1)
 
         assert x.shape == (x.size(0), self.max_num_voxels * self.num_point_features)
         return x
 
+class VFETemplate(nn.Module):
+    def __init__(self, model_cfg, **kwargs):
+        super().__init__()
+        self.model_cfg = model_cfg
+
+    def get_output_feature_dim(self):
+        raise NotImplementedError
+
+    def forward(self, **kwargs):
+        """
+        Args:
+            **kwargs:
+        Returns:
+            batch_dict:
+                ...
+                vfe_features: (num_voxels, C)
+        """
+        raise NotImplementedError
 
 class MeanVFE(nn.Module):
     def __init__(self, config):
