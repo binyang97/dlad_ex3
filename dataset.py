@@ -135,9 +135,19 @@ class DatasetLoader(Dataset):
         # for b in range(1,batch_size):
         #     batch[b]['voxel_coords'][:,0] += np.sum([batch[b_id]['voxel_coords'].shape[0] for b_id in range(b)])
         for key in ans_dict.keys():
-            for b in range(1,batch_size):
-                ans_dict[key] = np.concatenate((ans_dict[key], batch[b][key]),0,dtype=np.float32)
+            if key == 'input':
+                input_dict = ans_dict[key]
+                for k in input_dict.keys():
+                    for b in range(1,batch_size):
+                        input_dict[k] = np.concatenate((input_dict[k], batch[b][key][k]),0,dtype=np.float32)
+            else:
+                for b in range(1,batch_size):
+                    ans_dict[key] = np.concatenate((ans_dict[key], batch[b][key]),0,dtype=np.float32)
         for key in ans_dict.keys():
-            if key not in ['target', 'points', 'frame']:
+            if key == 'input':
+                input_dict = ans_dict[key]
+                for k in input_dict.keys():
+                    input_dict[k] = torch.from_numpy(input_dict[k])
+            elif key not in ['target', 'points', 'frame']:
                 ans_dict[key] = torch.from_numpy(ans_dict[key])
         return ans_dict
