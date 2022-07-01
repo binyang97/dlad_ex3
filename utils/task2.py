@@ -41,6 +41,7 @@ def roi_pool(pred, xyz, feat, config, canonical = False):
             pooled_xyz[i] = xyz_canonical
 
     pooled_feat = feat[valid_indices]
+    #valid_inv_matrix = inv_matrix[valid_indices]
     
     assert valid_pred.shape == (valid.size, 7)
     assert pooled_xyz.shape == (valid.size, config['max_points'], 3)

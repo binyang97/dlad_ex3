@@ -42,10 +42,10 @@ class DatasetLoader(Dataset):
                                                        xyz=points,
                                                        feat=feat,
                                                        config=self.config,
-                                                       canonical=True)
+                                                       canonical=False)
 
         if self.split == 'test':
-            voxels, voxel_coords = voxelization(proposals=valid_pred,
+            voxels  = voxelization(proposals=valid_pred,
                                                 xyzs=pooled_xyz,
                                                 feats=pooled_feat,
                                                 config=self.config)
@@ -59,7 +59,7 @@ class DatasetLoader(Dataset):
                                                                  config=self.config,
                                                                  train=self.split=='train')
 
-        voxels, voxel_coords = voxelization(proposals=pred,
+        voxels = voxelization(proposals=pred,
                                             xyzs=xyz,
                                             feats=feat,
                                             config=self.config)

@@ -47,7 +47,7 @@ class LitModel(pl.LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        x, assinged_target, iou = batch['input'], batch['assinged_target'], batch['iou']
+        x, assinged_target, iou = batch['input'].float(), batch['assinged_target'], batch['iou']
         pred_box, pred_class = self(x)
         loss = self.reg_loss(pred_box, assinged_target, iou) \
                + self.cls_loss(pred_class, iou)
@@ -55,7 +55,7 @@ class LitModel(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, assinged_target, iou = batch['input'], batch['assinged_target'], batch['iou']
+        x, assinged_target, iou = batch['input'].float(), batch['assinged_target'], batch['iou']
         pred_box, pred_class = self(x)
 
         loss = self.reg_loss(pred_box, assinged_target, iou) \
@@ -80,7 +80,7 @@ class LitModel(pl.LightningModule):
         self.log('h_map', hard, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
-        frame, x = batch['frame'], batch['input']
+        frame, x = batch['frame'], batch['input'].float()
         pred_box, pred_class = self(x)
         nms_pred, nms_score = generate_final_predictions(pred_box, pred_class, config['eval'])
         save_detections(os.path.join(self.output_dir, 'test'), frame, nms_pred, nms_score)

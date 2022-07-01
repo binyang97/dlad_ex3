@@ -46,10 +46,10 @@ class Model(nn.Module):
                 nn.ReLU(inplace=True)
             ])
             pre_channel = self.mid_fc[k]
-        mid_layers.extend([
-            nn.Conv1d(pre_channel, 1, kernel_size=1),
-            nn.Sigmoid()
-        ])
+        #mid_layers.extend([
+        #    nn.Conv1d(pre_channel, 1, kernel_size=1),
+        #    nn.Sigmoid()
+        #])
         self.mid_layers = nn.Sequential(*mid_layers)
 
         channel_in = self.mid_fc[-1]

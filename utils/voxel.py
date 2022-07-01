@@ -7,20 +7,49 @@ import numpy as np
 
 from utils.task2 import enlarge_box
 
+def compute_inv_matrix(box):
+    h = box[3]
+    w = box[4]
+    l = box[5]
+    x = box[0]
+    y = box[1]
+    z = box[2]
+    ry = box[6]
+    d = np.sqrt(l**2+w**2)
+
+    cos_ry = np.cos(ry)
+    sin_ry = np.sin(ry)
+    T = [[cos_ry, 0, sin_ry, x],
+        [0,       1, 0,      y],
+        [-sin_ry, 0, cos_ry, z]]
+    T = np.array(T)
+    C = T[:3, :3]
+    r = T[:3,  3]
+    T_inv = np.zeros((3,4))
+    T_inv[:,:3] = C.T
+    T_inv[:, 3] = np.dot(-C.T, r)
+
+    return T_inv
+
 def voxelization(proposals, xyzs, feats, config):
     # shuffling the points
-    np.random.shuffle(xyzs)
-    voxel_coords = []
+    #np.random.shuffle(xyzs)
+    #voxel_coords = []
     voxel_features = []
     enlarged_proposals = enlarge_box(proposals, config['delta'])
     voxel_size = config['voxel_grid_size']
     for (p, proposal) in enumerate(enlarged_proposals):
         h, w, l = proposal[3], proposal[4], proposal[5]
         feat = feats[p]
-        xyz = xyzs[p]
+        xyz_global = xyzs[p]
+
+        T_inv = compute_inv_matrix(proposal)
+        xyz_global_homo = np.hstack([xyz_global, np.ones((len(xyz_global),1))]).T
+        xyz_canonical =  np.dot(T_inv, xyz_global_homo).T
+        xyz = xyz_canonical[:, :3]
 
         voxel_coord = np.array([[l*i/voxel_size + l/(voxel_size*2), -h*j/voxel_size-h/(voxel_size*2), w*k/voxel_size + w/(voxel_size*2)] \
-                                for i in range(-voxel_size/2, voxel_size/2) for j in range(voxel_size) for k in range(-voxel_size/2, voxel_size/2)])
+                                for i in range(-int(voxel_size/2), int(voxel_size/2)) for j in range(voxel_size) for k in range(-int(voxel_size/2), int(voxel_size/2))])
 
         xmax = np.max(xyz[:,0]) + l/(voxel_size*2)
         xmin = np.min(xyz[:,0]) - l/(voxel_size*2)
@@ -48,14 +77,14 @@ def voxelization(proposals, xyzs, feats, config):
         for point_idx, voxel_idx in enumerate(selected_voxel_coord):
             if count[voxel_idx] < config['max_num_points_per_voxel']:
                 
-                voxel_feature[voxel_idx, count[voxel_idx]] = np.hstack((feat[point_idx], xyz[point_idx]))
+                voxel_feature[voxel_idx, count[voxel_idx]] = np.hstack((feat[point_idx], xyz_global[point_idx]))
                 count[voxel_idx] += 1
         
 
-        voxel_coords.append(voxel_coord)
+        #voxel_coords.append(voxel_coord)
         voxel_features.append(voxel_feature)
 
-    return np.array(voxel_features), np.array(voxel_coords)
+    return np.array(voxel_features)
 
 
 # Fully Connected Network
@@ -146,10 +175,12 @@ class MeanVFE(nn.Module):
             vfe_features: (num_voxels, C)
         """
         voxel_features, voxel_num_points = x, self.num_point_features
-        points_mean = voxel_features[:, :, :, :].sum(dim=2, keepdim=False)
-        normalizer = torch.clamp_min(voxel_num_points.view(-1, 1), min=1.0).type_as(voxel_features)
-        points_mean = points_mean / normalizer
+        points_mean = voxel_features[:, :, :, :].mean(dim=2, keepdim=False)
+        #normalizer = torch.clamp_min(voxel_num_points.view(-1, 1), min=1.0).type_as(voxel_features)
+        #points_mean = points_mean / normalizer
         voxel_features = points_mean.contiguous()
+        batch_size, _, _ =  voxel_features.shape
+        voxel_features = voxel_features.reshape(batch_size, -1, 1)
 
         return voxel_features
 

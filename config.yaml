@@ -14,10 +14,8 @@ data:
     seg_label: 0
     intensity: 0
     max_num_points_per_voxel: 35
-    max_num_voxels: 216 # voxel_grid_size^3
-    voxel_grid_size: 6
-    
-
+    max_num_voxels: 64 # voxel_grid_size^3
+    voxel_grid_size: 4
 
 model:
     channel_in: 128
@@ -29,12 +27,12 @@ model:
             [256, 256, 512]]
     cls_fc: [256, 256]
     reg_fc: [256, 256]
-    mid_fc: [512, 512]
+    mid_fc: [256, 256]
     vfe_fc: [128, 128, 256]
     grid_size: [6,6,6]
     num_point_features: 131
     max_num_points_per_voxel: 35
-    max_num_voxels: 216 # same as data
+    max_num_voxels: 64 # same as data
     encoder: 'mvfe' # svfe
 
 feature:
@@ -64,10 +62,11 @@ eval:
 
 trainer:
     default_root_dir: '/home/ubuntu/results/'
-    max_epochs: 35
+    max_epochs: 5
     check_val_every_n_epoch: 1
     resume_from_checkpoint: 
     num_sanity_val_steps: 0
     # Uncomment the following options if you want to try out framework changes without training too long
     limit_train_batches: 10
+    limit_val_batches: 5
     log_every_n_steps: 5
