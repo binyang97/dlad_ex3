@@ -46,11 +46,11 @@ class DatasetLoader(Dataset):
 
         if self.split == 'test':
             if self.config['use_voxel']:
-                #voxels = voxelization(proposals=valid_pred,
-                #                    xyzs=pooled_xyz,
-                #                    feats=pooled_feat,
-                #                    config=self.config)
-                return {'frame': frame, 'input': {'proposal':valid_pred, 'xyz_feat': np.concatenate((pooled_xyz, pooled_feat),-1)}}
+                voxels = voxelization(proposals=valid_pred,
+                                    xyzs=pooled_xyz,
+                                    feats=pooled_feat,
+                                    config=self.config)
+                return {'frame': frame, 'input': voxels}
             else:
                 return {'frame': frame, 'input': np.concatenate((pooled_xyz, pooled_feat),-1)}
 
@@ -62,15 +62,15 @@ class DatasetLoader(Dataset):
                                                                  config=self.config,
                                                                  train=self.split=='train')
 
-        #if self.config['use_voxel']:
-            #voxels = voxelization(proposals=pred,
-            #                    xyzs=xyz,
-            #                    feats=feat,
-            #                    config=self.config)
+        if self.config['use_voxel']:
+            voxels = voxelization(proposals=pred,
+                                xyzs=xyz,
+                                feats=feat,
+                                config=self.config)
 
         sampled_frame = {
             # 'input': np.concatenate((xyz, feat),-1),
-            'input': {'proposal':pred, 'xyz_feat': np.concatenate((xyz, feat),-1)} if self.config['use_voxel'] else np.concatenate((xyz, feat),-1),
+            'input': voxels if self.config['use_voxel'] else np.concatenate((xyz, feat),-1),
             'assinged_target': assinged_target,
             'iou': iou
         }
@@ -141,3 +141,5 @@ class DatasetLoader(Dataset):
             if key not in ['target', 'points', 'frame']:
                 ans_dict[key] = torch.from_numpy(ans_dict[key])
         return ans_dict
+    
+    

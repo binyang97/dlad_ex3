@@ -114,8 +114,9 @@ class Voxelization(nn.Module):
         return T_inv
 
     def forward(self, x):
-        proposals = x['proposal'] 
-        xyzs, feats = x['xyz_feat'][..., :3], x['xyz_feat'][...,3:]
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        proposals = x['proposal'].contiguous()   
+        xyzs, feats = x['xyz_feat'][..., :3].contiguous(), x['xyz_feat'][...,3:].contiguous()   
         voxel_features = []
         enlarged_proposals = enlarge_box(proposals, self.config['delta'])
         voxel_size = self.config['voxel_grid_size']
@@ -125,8 +126,7 @@ class Voxelization(nn.Module):
             xyz_global = xyzs[p]
 
             T_inv = self.compute_inv_matrix(proposal)
-            corner_3d = torch.cat((corner_3d, torch.ones((8,1))), dim = 1)
-            xyz_global_homo = torch.cat((xyz_global, torch.ones((len(xyz_global),1)))).t()
+            xyz_global_homo = torch.hstack((xyz_global, torch.ones((len(xyz_global),1)))).t()
             xyz_canonical =  torch.matmul(T_inv, xyz_global_homo).t()
             xyz = xyz_canonical[:, :3]
 
@@ -144,7 +144,7 @@ class Voxelization(nn.Module):
                         (voxel_coord[:,1]>ymin) & (voxel_coord[:,1]<ymax)& \
                         (voxel_coord[:,2]>zmin) & (voxel_coord[:,2]<zmax)
 
-            voxel_idx = torch.where(voxel_mask)
+            voxel_idx = torch.where(voxel_mask)[0]
             
 
             voxel_coord_filtered = voxel_coord[voxel_idx]

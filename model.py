@@ -105,8 +105,9 @@ class Model(nn.Module):
                 xyz, feat = layer(xyz, feat)
 
         else:
-            x = x.contiguous()     
-            x = self.voxelization_layer(x) # (B,216,35,C)
+            #x = self.voxelization_layer(x) # (B,216,35,C)
+
+            x.contiguous()
 
             feat = self.SVFE(x)
             feat = self.mid_layers(feat)
