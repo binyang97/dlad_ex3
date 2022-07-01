@@ -1,5 +1,3 @@
-from functools import partial
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,19 +11,21 @@ def voxelization(proposals, xyzs, feats, config):
     voxel_coords = []
     voxel_features = []
     enlarged_proposals = enlarge_box(proposals, config['delta'])
+    voxel_size = config['voxel_grid_size']
     for (p, proposal) in enumerate(enlarged_proposals):
         h, w, l = proposal[3], proposal[4], proposal[5]
         feat = feats[p]
         xyz = xyzs[p]
 
-        voxel_coord = np.array([[l*i/6 + l/12, -h*j/6-h/12, w*k/6 + w/12] for i in range(-3, 3) for j in range(6) for k in range(-3, 3)])
+        voxel_coord = np.array([[l*i/voxel_size + l/(voxel_size*2), -h*j/voxel_size-h/(voxel_size*2), w*k/voxel_size + w/(voxel_size*2)] \
+                                for i in range(-voxel_size/2, voxel_size/2) for j in range(voxel_size) for k in range(-voxel_size/2, voxel_size/2)])
 
-        xmax = np.max(xyz[:,0]) + l/12 
-        xmin = np.min(xyz[:,0]) - l/12
-        ymax = np.max(xyz[:,1]) + h/12
-        ymin = np.min(xyz[:,1]) - h/12
-        zmax = np.max(xyz[:,2]) + w/12
-        zmin = np.min(xyz[:,2]) - w/12
+        xmax = np.max(xyz[:,0]) + l/(voxel_size*2)
+        xmin = np.min(xyz[:,0]) - l/(voxel_size*2)
+        ymax = np.max(xyz[:,1]) + h/(voxel_size*2)
+        ymin = np.min(xyz[:,1]) - h/(voxel_size*2)
+        zmax = np.max(xyz[:,2]) + w/(voxel_size*2)
+        zmin = np.min(xyz[:,2]) - w/(voxel_size*2)
 
         voxel_mask = (voxel_coord[:,0]>xmin) & (voxel_coord[:,0]<xmax) & \
                     (voxel_coord[:,1]>ymin) & (voxel_coord[:,1]<ymax)& \
@@ -50,10 +50,10 @@ def voxelization(proposals, xyzs, feats, config):
                 count[voxel_idx] += 1
         
 
-        voxel_coords.append(voxel_coord)
+        # voxel_coords.append(voxel_coord)
         voxel_features.append(voxel_feature)
 
-    return np.array(voxel_features), np.array(voxel_coords)
+    return np.array(voxel_features) #, np.array(voxel_coords)
 
 
 # Fully Connected Network
@@ -66,9 +66,11 @@ class FCN(nn.Module):
 
     def forward(self,x):
         # KK is the stacked k across batch
+       # print(x.shape)
         d, kk, t, _ = x.shape
+        #x = self.linear(x.view(kk*t,-1))
         x = self.linear(x)
-        x = x.view(d*kk*t,-1)
+        x = x.view(d*kk*t, -1)
         x = F.relu(self.bn(x))
         return x.view(d,kk,t,-1)
 
@@ -85,7 +87,7 @@ class VFE(nn.Module):
         # point-wise feauture
         pwf = self.fcn(x)
         #locally aggregated feature
-        laf = torch.max(pwf,2)[0].unsqueeze(2).repeat(1,1,self.T,1)
+        laf = torch.max(pwf,2)[0].unsqueeze(2).repeat(1, 1,self.T,1)
         # point-wise concat feature
         pwcf = torch.cat((pwf,laf),dim=3)
         # apply mask
@@ -116,10 +118,58 @@ class SVFE(nn.Module):
 
         x = self.fcn(x)
         # element-wise max pooling
-        x = torch.max(x,2)[0].view(x.size(0), -1)
+        x = torch.max(x,2)[0].reshape(x.size(0), -1)
 
         assert x.shape == (x.size(0), self.max_num_voxels * self.num_point_features)
         return x
+
+class VFETemplate(nn.Module):
+    def __init__(self, model_cfg, **kwargs):
+        super().__init__()
+        self.model_cfg = model_cfg
+
+    def get_output_feature_dim(self):
+        raise NotImplementedError
+
+    def forward(self, **kwargs):
+        """
+        Args:
+            **kwargs:
+        Returns:
+            batch_dict:
+                ...
+                vfe_features: (num_voxels, C)
+        """
+        raise NotImplementedError
+
+class MeanVFE(nn.Module):
+    def __init__(self, config):
+        super(MeanVFE, self).__init__()
+        self.__dict__.update(config)
+        #self.num_point_features = num_point_features
+
+    #def get_output_feature_dim(self):
+    #    return self.num_point_features
+
+    def forward(self, x):
+        """
+        Args:
+            batch_dict:
+                voxels: (num_voxels, max_points_per_voxel, C)
+                voxel_num_points: optional (num_voxels)
+            **kwargs:
+        Returns:
+            vfe_features: (num_voxels, C)
+        """
+        voxel_features, voxel_num_points = x, self.num_point_features
+        points_mean = voxel_features[:, :, :, :].mean(dim=2, keepdim=False)
+        #normalizer = torch.clamp_min(voxel_num_points.view(-1, 1), min=1.0).type_as(voxel_features)
+        #points_mean = points_mean / normalizer
+        voxel_features = points_mean.contiguous()
+        batch_size, _, _ =  voxel_features.shape
+        voxel_features = voxel_features.reshape(batch_size, -1, 1)
+
+        return voxel_features
 
 # tv = None
 # try:

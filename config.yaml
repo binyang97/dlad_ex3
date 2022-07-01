@@ -16,11 +16,18 @@ data:
     t_bg_hard_lb: 0.05          # Task 3b: Background hard sample iou lower bound
     t_bg_up: 0.45               # Task 3b: Background sample iou upper bound
 
-    seg_label: 0
-    intensity: 0
+    seg_label: False
+    intensity: False
 
     max_num_points_per_voxel: 35
-    max_num_voxels: 216
+    max_num_voxels: 64 # voxel_grid_size^3
+    voxel_grid_size: 4
+
+    use_dir_cls: False
+
+    use_ccs: False
+    use_voxel: False # in accordance with encoder
+
 
 model:
     channel_in: 128
@@ -32,13 +39,14 @@ model:
             [256, 256, 512]]
     cls_fc: [256, 256]
     reg_fc: [256, 256]
-    mid_fc: [512, 512]
-
+    dir_fc: [256, 256]
+    mid_fc: [256, 256]
     vfe_fc: [128, 128, 256]
     grid_size: [6,6,6]
     num_point_features: 131
-    max_num_points_per_voxel: 35
-    max_num_voxels: 216
+    max_num_points_per_voxel: 35 # same as data
+    max_num_voxels: 64 # same as data
+    encoder: 'original' # ['mvfe', 'svfe', 'original']
 
 optimizer:
     lr: 0.001
@@ -52,19 +60,22 @@ loss:
     positive_reg_lb: 0.55
     positive_cls_lb: 0.6
     negative_cls_ub: 0.45
+    use_corner_loss: False
+    use_dir_cls: False # same as data
+    huber_delta: 1
 
 eval:
-    output_dir: './data/'
+    output_dir: '/home/ubuntu/results/'
     t_rpn_recall: 0.5           # Task 1: RPN recall threshold
     t_nms: 0.1                  # Task 5: NMS threshold
     t_score: 0.3                # Task 6: Refinement network score threshold
 
 trainer:
-    default_root_dir: './data/'
+    default_root_dir: '/home/ubuntu/results/'
     max_epochs: 35
     check_val_every_n_epoch: 1
     resume_from_checkpoint: 
     num_sanity_val_steps: 0
     # Uncomment the following options if you want to try out framework changes without training too long
-    limit_train_batches: 1000
-    log_every_n_steps: 5
+    # limit_train_batches: 10
+    # log_every_n_steps: 5

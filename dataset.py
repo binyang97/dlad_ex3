@@ -42,14 +42,17 @@ class DatasetLoader(Dataset):
                                                        xyz=points,
                                                        feat=feat,
                                                        config=self.config,
-                                                       canonical=True)
+                                                       canonical=self.config['use_ccs'])
 
         if self.split == 'test':
-            voxels, voxel_coords = voxelization(proposals=valid_pred,
-                                                xyzs=pooled_xyz,
-                                                feats=pooled_feat,
-                                                config=self.config)
-            return {'frame': frame, 'input': voxels}
+            if self.config['use_voxel']:
+                voxels = voxelization(proposals=valid_pred,
+                                    xyzs=pooled_xyz,
+                                    feats=pooled_feat,
+                                    config=self.config)
+                return {'frame': frame, 'input': voxels}
+            else:
+                return {'frame': frame, 'input': np.concatenate((pooled_xyz, pooled_feat),-1)}
 
         target = self.get_data(idx, 'target')
         assinged_target, xyz, feat, iou, pred = sample_proposals(pred=valid_pred,
@@ -59,14 +62,15 @@ class DatasetLoader(Dataset):
                                                                  config=self.config,
                                                                  train=self.split=='train')
 
-        voxels, voxel_coords = voxelization(proposals=pred,
-                                            xyzs=xyz,
-                                            feats=feat,
-                                            config=self.config)
+        if self.config['use_voxel']:
+            voxels = voxelization(proposals=pred,
+                                xyzs=xyz,
+                                feats=feat,
+                                config=self.config)
 
         sampled_frame = {
             # 'input': np.concatenate((xyz, feat),-1),
-            'input': voxels,
+            'input': voxels if self.config['use_voxel'] else np.concatenate((xyz, feat),-1),
             'assinged_target': assinged_target,
             'iou': iou
         }
