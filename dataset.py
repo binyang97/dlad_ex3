@@ -11,6 +11,7 @@ import h5py
 from utils.task2 import roi_pool
 from utils.task3 import sample_proposals
 from utils.voxel import voxelization
+from utils.ccs import rotate_points_along_y, global2canonical
 
 class DatasetLoader(Dataset):
     def __init__(self, config, split):
@@ -41,8 +42,10 @@ class DatasetLoader(Dataset):
         valid_pred, pooled_xyz, pooled_feat = roi_pool(pred=self.get_data(idx, 'detections'),
                                                        xyz=points,
                                                        feat=feat,
-                                                       config=self.config,
-                                                       canonical=self.config['use_ccs'])
+                                                       config=self.config)
+
+        if self.config['use_ccs']:
+            pooled_xyz = global2canonical(pooled_xyz, valid_pred)
 
         if self.split == 'test':
             if self.config['use_voxel']:
@@ -50,9 +53,12 @@ class DatasetLoader(Dataset):
                                     xyzs=pooled_xyz,
                                     feats=pooled_feat,
                                     config=self.config)
-                return {'frame': frame, 'input': voxels}
-            else:
-                return {'frame': frame, 'input': np.concatenate((pooled_xyz, pooled_feat),-1)}
+            sampled_frame = {'frame': frame,
+                    'input': voxels if self.config['use_voxel'] else np.concatenate((pooled_xyz, pooled_feat),-1),
+                    }
+            if self.config['use_ccs']:
+                sampled_frame.update({'anchor': valid_pred})
+            return sampled_frame
 
         target = self.get_data(idx, 'target')
         assinged_target, xyz, feat, iou, pred = sample_proposals(pred=valid_pred,
@@ -61,6 +67,10 @@ class DatasetLoader(Dataset):
                                                                  feat=pooled_feat,
                                                                  config=self.config,
                                                                  train=self.split=='train')
+
+        if self.config['use_ccs']:
+            assinged_target = global2canonical(assinged_target.reshape(-1, 1, assinged_target.shape[1]),
+                                               pred).squeeze(1)
 
         if self.config['use_voxel']:
             voxels = voxelization(proposals=pred,
@@ -72,8 +82,12 @@ class DatasetLoader(Dataset):
             # 'input': np.concatenate((xyz, feat),-1),
             'input': voxels if self.config['use_voxel'] else np.concatenate((xyz, feat),-1),
             'assinged_target': assinged_target,
-            'iou': iou
+            'iou': iou,
         }
+        
+        if self.config['use_ccs']:
+            sampled_frame.update({'anchor': valid_pred})
+
         if self.split == 'train':
             return sampled_frame
         
@@ -135,19 +149,9 @@ class DatasetLoader(Dataset):
         # for b in range(1,batch_size):
         #     batch[b]['voxel_coords'][:,0] += np.sum([batch[b_id]['voxel_coords'].shape[0] for b_id in range(b)])
         for key in ans_dict.keys():
-            if key == 'input':
-                input_dict = ans_dict[key]
-                for k in input_dict.keys():
-                    for b in range(1,batch_size):
-                        input_dict[k] = np.concatenate((input_dict[k], batch[b][key][k]),0,dtype=np.float32)
-            else:
-                for b in range(1,batch_size):
-                    ans_dict[key] = np.concatenate((ans_dict[key], batch[b][key]),0,dtype=np.float32)
+            for b in range(1,batch_size):
+                ans_dict[key] = np.concatenate((ans_dict[key], batch[b][key]),0,dtype=np.float32)
         for key in ans_dict.keys():
-            if key == 'input':
-                input_dict = ans_dict[key]
-                for k in input_dict.keys():
-                    input_dict[k] = torch.from_numpy(input_dict[k])
-            elif key not in ['target', 'points', 'frame']:
-                ans_dict[key] = torch.from_numpy(ans_dict[key])
+            if key not in ['target', 'points', 'frame']:
+                ans_dict[key] = torch.from_numpy(ans_dict[key]).float()
         return ans_dict

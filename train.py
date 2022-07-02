@@ -28,6 +28,7 @@ from dataset import DatasetLoader
 from utils.task4 import RegressionLoss, ClassificationLoss
 from utils.eval import generate_final_predictions, save_detections, generate_submission, compute_map
 from utils.vis import point_scene
+from utils.ccs import canonical2global
 
 from aws_start_instance import build_ssh_cmd, build_rsync_cmd
 
@@ -47,20 +48,26 @@ class LitModel(pl.LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        x, assinged_target, iou = batch['input'].float(), batch['assinged_target'], batch['iou']
+        x, assinged_target, iou = batch['input'], batch['assinged_target'], batch['iou']
+        anchor = batch['anchor'] if 'anchor' in batch else None
         pred = self(x)
-        loss = self.reg_loss(pred, assinged_target, iou) \
+        
+        loss = self.reg_loss(pred, assinged_target, iou, anchor) \
                + self.cls_loss(pred['class'], iou)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, assinged_target, iou = batch['input'].float(), batch['assinged_target'], batch['iou']
+        x, assinged_target, iou = batch['input'], batch['assinged_target'], batch['iou']
+        anchor = batch['anchor'] if 'anchor' in batch else None
         pred = self(x)
 
-        loss = self.reg_loss(pred, assinged_target, iou) \
+        loss = self.reg_loss(pred, assinged_target, iou, anchor) \
                + self.cls_loss(pred['class'], iou)
         self.log('valid_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        if self.config['data']['use_ccs']:
+            pred['box'] = canonical2global(pred['box'], anchor)
 
         nms_pred, nms_score = generate_final_predictions(pred['box'], pred['class'], config['eval'])
         save_detections(os.path.join(self.output_dir, 'pred'), batch['frame'], nms_pred, nms_score)
@@ -80,8 +87,13 @@ class LitModel(pl.LightningModule):
         self.log('h_map', hard, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
-        frame, x = batch['frame'], batch['input'].float()
+        frame, x = batch['frame'], batch['input']
+        anchor = batch['anchor'] if 'anchor' in batch else None
         pred = self(x)
+
+        if self.config['data']['use_ccs']:
+            pred['box'] = canonical2global(pred['box'], anchor)
+            
         nms_pred, nms_score = generate_final_predictions(pred['box'], pred['class'], config['eval'])
         save_detections(os.path.join(self.output_dir, 'test'), frame, nms_pred, nms_score)
 

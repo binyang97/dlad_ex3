@@ -1,8 +1,7 @@
-from logging.config import valid_ident
 import numpy as np
 from timeit import default_timer as timer
 
-def roi_pool(pred, xyz, feat, config, canonical = False):
+def roi_pool(pred, xyz, feat, config):
     '''
     Task 2
     a. Enlarge predicted 3D bounding boxes by delta=1.0 meters in all directions.
@@ -30,15 +29,9 @@ def roi_pool(pred, xyz, feat, config, canonical = False):
         config['max_points'] number of points in the final sampled ROI
     '''
     enlarged_pred = enlarge_box(pred, config['delta'])
-    valid_indices, valid, inv_matrix = points_in_boxes(xyz, enlarged_pred, config['max_points'])
+    valid_indices, valid = points_in_boxes(xyz, enlarged_pred, config['max_points'])
     valid_pred = pred[valid]
     pooled_xyz = xyz[valid_indices]
-
-    if canonical: 
-        for (i, xyz_global) in enumerate(pooled_xyz):
-            xyz_canonical = inv_matrix[i] @ np.hstack([xyz_global, np.ones((len(xyz_global),1))]).T
-            xyz_canonical = xyz_canonical.T[:,:3]
-            pooled_xyz[i] = xyz_canonical
 
     pooled_feat = feat[valid_indices]
     
@@ -109,7 +102,7 @@ def points_in_box(xyz, box):
     xyz_index = xyz_sub_index[xyz_prime_mask]
    #xyz_local = xyz_prime[xyz_prime_mask]
 
-    return xyz_index, T_inv
+    return xyz_index
 
 
 def points_in_boxes(xyz, boxes, max_points):
@@ -124,19 +117,16 @@ def points_in_boxes(xyz, boxes, max_points):
     '''
     valid_indices = []
     valid = []
-    tran_inv = []
     for (i, box) in enumerate(boxes):
         xyz_index, inv_matrix = points_in_box(xyz, box)
         if len(xyz_index) > 0:
             valid_index = sample_w_padding(xyz_index, max_points)
             valid_indices.append(valid_index)
             valid.append(i)
-            tran_inv.append(inv_matrix)
     valid_indices = np.array(valid_indices).reshape(-1, max_points)
     valid = np.array(valid)
-    tran_inv = np.array(tran_inv)
 
-    return valid_indices, valid, tran_inv
+    return valid_indices, valid
 
 def sample_w_padding(indices, num_needed):
     num_elements = indices.size

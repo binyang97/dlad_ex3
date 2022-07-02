@@ -17,15 +17,12 @@ data:
     t_bg_up: 0.45               # Task 3b: Background sample iou upper bound
 
     seg_label: False
-    intensity: False
+    intensity: True
 
     max_num_points_per_voxel: 35
     max_num_voxels: 64 # voxel_grid_size^3
     voxel_grid_size: 4
-
-    use_dir_cls: False
-
-    use_ccs: False
+    use_ccs: True
     use_voxel: False # in accordance with encoder
 
 
@@ -39,14 +36,16 @@ model:
             [256, 256, 512]]
     cls_fc: [256, 256]
     reg_fc: [256, 256]
-    dir_fc: [256, 256]
+    dir_fc: [256]
     mid_fc: [256, 256]
     vfe_fc: [128, 128, 256]
     grid_size: [6,6,6]
-    num_point_features: 131
+    num_point_features: 132 # 128 + xyz, if use seman and intensities,this value should be 133
     max_num_points_per_voxel: 35 # same as data
     max_num_voxels: 64 # same as data
+    voxel_grid_size: 4
     encoder: 'original' # ['mvfe', 'svfe', 'original']
+    use_dir_cls: True # same as loss
 
 optimizer:
     lr: 0.001
@@ -60,8 +59,8 @@ loss:
     positive_reg_lb: 0.55
     positive_cls_lb: 0.6
     negative_cls_ub: 0.45
-    use_corner_loss: False
-    use_dir_cls: False # same as data
+    use_corner_loss: True
+    use_dir_cls: True # same as model
     huber_delta: 1
 
 eval:
@@ -77,5 +76,5 @@ trainer:
     resume_from_checkpoint: 
     num_sanity_val_steps: 0
     # Uncomment the following options if you want to try out framework changes without training too long
-    # limit_train_batches: 10
-    # log_every_n_steps: 5
+    limit_train_batches: 10
+    log_every_n_steps: 5

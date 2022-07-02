@@ -5,7 +5,7 @@
 import torch.nn as nn
 from pointnet2_ops.pointnet2_modules import PointnetSAModule
 
-from utils.voxel import SVFE, MeanVFE
+from utils.voxel import SVFE, MeanVFE, Voxelization
 
 class Model(nn.Module):
     def __init__(self, config):
@@ -14,6 +14,8 @@ class Model(nn.Module):
 
         # Encoder
         if self.encoder == 'original':
+            channel_in = self.num_point_features - 3
+            # if use more features (intensity), input channel size should be modified
             self.set_abstraction = nn.ModuleList()
             for k in range(len(self.npoint)):
                 mlps = [channel_in] + self.mlps[k]
@@ -35,6 +37,7 @@ class Model(nn.Module):
             elif self.encoder == 'mvfe':
                 self.SVFE = MeanVFE(config)
 
+            self.voxelization_layer = Voxelization(config)
             channel_in = self.max_num_voxels * self.num_point_features
 
             # Middle layer
@@ -88,7 +91,7 @@ class Model(nn.Module):
                 pre_channel = self.dir_fc[k]
             dir_layers.extend([
                 nn.Conv1d(pre_channel, 2, kernel_size=1),
-                nn.Softmax(dim=-1)
+                #nn.Softmax(dim=-1)
             ])
             self.dir_layers = nn.Sequential(*dir_layers)
 
@@ -101,7 +104,8 @@ class Model(nn.Module):
                 xyz, feat = layer(xyz, feat)
 
         else:
-            x = x.contiguous()      # (B,216,35,C)
+            x.contiguous()
+
             feat = self.SVFE(x)
             feat = self.mid_layers(feat)
             
