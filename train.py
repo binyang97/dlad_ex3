@@ -2,6 +2,7 @@
 # Material for Project 3
 # For further questions contact Ozan Unal, ozan.unal@vision.ee.ethz.ch
 
+from operator import mod
 import os
 import sys
 import argparse
@@ -28,7 +29,7 @@ from dataset import DatasetLoader
 from utils.task4 import RegressionLoss, ClassificationLoss
 from utils.eval import generate_final_predictions, save_detections, generate_submission, compute_map
 from utils.vis import point_scene
-from utils.ccs import canonical2global
+from utils.ccs import canonical2global, modify_ry
 
 from aws_start_instance import build_ssh_cmd, build_rsync_cmd
 
@@ -68,6 +69,8 @@ class LitModel(pl.LightningModule):
 
         if self.config['data']['use_ccs']:
             pred['box'] = canonical2global(pred['box'], anchor)
+        if self.config['loss']['use_dir_cls']:
+            pred['box'] = modify_ry(pred)
 
         nms_pred, nms_score = generate_final_predictions(pred['box'], pred['class'], config['eval'])
         save_detections(os.path.join(self.output_dir, 'pred'), batch['frame'], nms_pred, nms_score)
@@ -93,7 +96,9 @@ class LitModel(pl.LightningModule):
 
         if self.config['data']['use_ccs']:
             pred['box'] = canonical2global(pred['box'], anchor)
-            
+        if self.config['loss']['use_dir_cls']:
+            pred['box'] = modify_ry(pred)
+
         nms_pred, nms_score = generate_final_predictions(pred['box'], pred['class'], config['eval'])
         save_detections(os.path.join(self.output_dir, 'test'), frame, nms_pred, nms_score)
 

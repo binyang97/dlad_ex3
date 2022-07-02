@@ -14,8 +14,9 @@ class Model(nn.Module):
 
         # Encoder
         if self.encoder == 'original':
-            channel_in = self.num_point_features - 3
+            channel_in = self.num_point_features
             # if use more features (intensity), input channel size should be modified
+            self.mlps[0][0] += channel_in - 131
             self.set_abstraction = nn.ModuleList()
             for k in range(len(self.npoint)):
                 mlps = [channel_in] + self.mlps[k]
@@ -32,12 +33,12 @@ class Model(nn.Module):
                     )
                 channel_in = mlps[-1]
         else:
-            if self.encoder == 'svfe':
-                self.SVFE = SVFE(config)
-            elif self.encoder == 'mvfe':
-                self.SVFE = MeanVFE(config)
+            # if self.encoder == 'svfe':
+            #     self.SVFE = SVFE(config)
+            # elif self.encoder == 'mvfe':
+            #     self.SVFE = MeanVFE(config)
 
-            self.voxelization_layer = Voxelization(config)
+            # self.voxelization_layer = Voxelization(config)
             channel_in = self.max_num_voxels * self.num_point_features
 
             # Middle layer
@@ -106,8 +107,8 @@ class Model(nn.Module):
         else:
             x.contiguous()
 
-            feat = self.SVFE(x)
-            feat = self.mid_layers(feat)
+            # feat = self.SVFE(x)
+            feat = self.mid_layers(x)
             
         pred_class = self.cls_layers(feat).squeeze(dim=-1)  # (B,1)
         pred_box = self.det_layers(feat).squeeze(dim=-1)    # (B,7)

@@ -80,6 +80,12 @@ def voxelization(proposals, xyzs, feats, config):
                 count[voxel_idx] += 1
         
 
+        for i, c in enumerate(count):
+            if c == 0:
+                pass
+            else:
+                voxel_feature[i] = voxel_feature[i] / c
+
         #voxel_coords.append(voxel_coord)
         voxel_features.append(voxel_feature)
 

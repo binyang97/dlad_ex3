@@ -118,7 +118,7 @@ def points_in_boxes(xyz, boxes, max_points):
     valid_indices = []
     valid = []
     for (i, box) in enumerate(boxes):
-        xyz_index, inv_matrix = points_in_box(xyz, box)
+        xyz_index = points_in_box(xyz, box)
         if len(xyz_index) > 0:
             valid_index = sample_w_padding(xyz_index, max_points)
             valid_indices.append(valid_index)

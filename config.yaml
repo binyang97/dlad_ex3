@@ -23,7 +23,7 @@ data:
     max_num_voxels: 64 # voxel_grid_size^3
     voxel_grid_size: 4
     use_ccs: True
-    use_voxel: False # in accordance with encoder
+    use_voxel: True # in accordance with encoder
 
 
 model:
