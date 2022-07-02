@@ -87,7 +87,7 @@ def voxelization(proposals, xyzs, feats, config):
                 voxel_feature[i] = voxel_feature[i] / c
 
         #voxel_coords.append(voxel_coord)
-        voxel_feature = np.array(voxel_feature).flatten()
+        voxel_feature = np.array(voxel_feature).flatten().reshape(-1,1)
         voxel_features.append(voxel_feature)
 
     return np.array(voxel_features)
