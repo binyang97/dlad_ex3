@@ -1,4 +1,4 @@
-from functools import partial
+# from functools import partial
 
 import torch
 import torch.nn as nn
@@ -8,9 +8,6 @@ import numpy as np
 from utils.task2 import enlarge_box
 
 def compute_inv_matrix(box):
-    h = box[3]
-    w = box[4]
-    l = box[5]
     x = box[0]
     y = box[1]
     z = box[2]
@@ -37,19 +34,25 @@ def voxelization(proposals, xyzs, feats, config):
     voxel_features = []
     enlarged_proposals = enlarge_box(proposals, config['delta'])
     voxel_size = config['voxel_grid_size']
+    
     for (p, proposal) in enumerate(enlarged_proposals):
         h, w, l = proposal[3], proposal[4], proposal[5]
         feat = feats[p]
         xyz_global = xyzs[p]
 
-        T_inv = compute_inv_matrix(proposal)
-        xyz_global_homo = np.hstack([xyz_global, np.ones((len(xyz_global),1))]).T
-        xyz_canonical =  np.dot(T_inv, xyz_global_homo).T
-        xyz = xyz_canonical[:, :3]
-
-        voxel_coord = np.array([[l*i/voxel_size + l/(voxel_size*2), -h*j/voxel_size-h/(voxel_size*2), w*k/voxel_size + w/(voxel_size*2)] \
+        if not config['use_ccs']:
+            T_inv = compute_inv_matrix(proposal)
+            xyz_global_homo = np.hstack([xyz_global, np.ones((len(xyz_global),1))]).T
+            xyz_canonical =  np.dot(T_inv, xyz_global_homo).T
+            xyz = xyz_canonical[:, :3]
+            voxel_coord = np.array([[l*i/voxel_size + l/(voxel_size*2), -h*j/voxel_size-h/(voxel_size*2), w*k/voxel_size + w/(voxel_size*2)] \
                                 for i in range(-int(voxel_size/2), int(voxel_size/2)) for j in range(voxel_size) for k in range(-int(voxel_size/2), int(voxel_size/2))])
-
+        else:
+            xyz = xyz_global
+            voxel_coord = np.array([[l*i/voxel_size + l/(voxel_size*2), -h*j/voxel_size-h/(voxel_size*2) + 1, w*k/voxel_size + w/(voxel_size*2)] \
+                                for i in range(-int(voxel_size/2), int(voxel_size/2)) for j in range(voxel_size) for k in range(-int(voxel_size/2), int(voxel_size/2))])
+        
+        
         xmax = np.max(xyz[:,0]) + l/(voxel_size*2)
         xmin = np.min(xyz[:,0]) - l/(voxel_size*2)
         ymax = np.max(xyz[:,1]) + h/(voxel_size*2)
@@ -79,8 +82,15 @@ def voxelization(proposals, xyzs, feats, config):
                 voxel_feature[voxel_idx, count[voxel_idx]] = np.hstack((feat[point_idx], xyz_global[point_idx]))
                 count[voxel_idx] += 1
         
+        voxel_feature = np.squeeze(np.sum(voxel_feature, axis = 1)) #(Voxel, C)
+        for i, c in enumerate(count):
+            if c == 0:
+                pass
+            else:
+                voxel_feature[i] = voxel_feature[i] / c
 
         #voxel_coords.append(voxel_coord)
+        voxel_feature = np.array(voxel_feature).flatten().reshape(-1,1)
         voxel_features.append(voxel_feature)
 
     return np.array(voxel_features)
@@ -114,8 +124,9 @@ class Voxelization(nn.Module):
         return T_inv
 
     def forward(self, x):
-        proposals = x['proposal'] 
-        xyzs, feats = x['xyz_feat'][..., :3], x['xyz_feat'][...,3:]
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        proposals = x['proposal'].contiguous()   
+        xyzs, feats = x['xyz_feat'][..., :3].contiguous(), x['xyz_feat'][...,3:].contiguous()   
         voxel_features = []
         enlarged_proposals = enlarge_box(proposals, self.config['delta'])
         voxel_size = self.config['voxel_grid_size']
@@ -125,8 +136,7 @@ class Voxelization(nn.Module):
             xyz_global = xyzs[p]
 
             T_inv = self.compute_inv_matrix(proposal)
-            corner_3d = torch.cat((corner_3d, torch.ones((8,1))), dim = 1)
-            xyz_global_homo = torch.cat((xyz_global, torch.ones((len(xyz_global),1)))).t()
+            xyz_global_homo = torch.hstack((xyz_global, torch.ones((len(xyz_global),1)))).t()
             xyz_canonical =  torch.matmul(T_inv, xyz_global_homo).t()
             xyz = xyz_canonical[:, :3]
 
@@ -144,7 +154,7 @@ class Voxelization(nn.Module):
                         (voxel_coord[:,1]>ymin) & (voxel_coord[:,1]<ymax)& \
                         (voxel_coord[:,2]>zmin) & (voxel_coord[:,2]<zmax)
 
-            voxel_idx = torch.where(voxel_mask)
+            voxel_idx = torch.where(voxel_mask)[0]
             
 
             voxel_coord_filtered = voxel_coord[voxel_idx]

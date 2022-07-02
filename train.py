@@ -1,7 +1,7 @@
 # Course: Deep Learning for Autonomous Driving, ETH Zurich
 # Material for Project 3
 # For further questions contact Ozan Unal, ozan.unal@vision.ee.ethz.ch
-
+from operator import mod
 import os
 import sys
 import argparse
@@ -28,6 +28,7 @@ from dataset import DatasetLoader
 from utils.task4 import RegressionLoss, ClassificationLoss
 from utils.eval import generate_final_predictions, save_detections, generate_submission, compute_map
 from utils.vis import point_scene
+from utils.ccs import canonical2global, modify_ry
 
 from aws_start_instance import build_ssh_cmd, build_rsync_cmd
 
@@ -47,28 +48,37 @@ class LitModel(pl.LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        x, assinged_target, iou = batch['input'].float(), batch['assinged_target'], batch['iou']
+        x, assinged_target, iou = batch['input'], batch['assinged_target'], batch['iou']
+        anchor = batch['anchor'] if 'anchor' in batch else None
         pred = self(x)
-        loss = self.reg_loss(pred, assinged_target, iou) \
+        
+        loss = self.reg_loss(pred, assinged_target, iou, anchor) \
                + self.cls_loss(pred['class'], iou)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, assinged_target, iou = batch['input'].float(), batch['assinged_target'], batch['iou']
+        x, assinged_target, iou = batch['input'], batch['assinged_target'], batch['iou']
+        anchor = batch['anchor'] if 'anchor' in batch else None
         pred = self(x)
 
-        loss = self.reg_loss(pred, assinged_target, iou) \
+        loss = self.reg_loss(pred, assinged_target, iou, anchor) \
                + self.cls_loss(pred['class'], iou)
         self.log('valid_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        if self.config['data']['use_ccs']:
+            pred['box'][:, 6] += anchor[:, 6]
+            pred['box'] = canonical2global(pred['box'], anchor)
+        if self.config['loss']['use_dir_cls']:
+            pred['box'] = modify_ry(pred)
 
         nms_pred, nms_score = generate_final_predictions(pred['box'], pred['class'], config['eval'])
         save_detections(os.path.join(self.output_dir, 'pred'), batch['frame'], nms_pred, nms_score)
 
-        # Visualization
-        if batch_idx == 0:
-            scene = point_scene(batch['points'], nms_pred, batch['target'], name=f'e{self.current_epoch}')
-            self.logger.experiment[0].log(scene, commit=False)
+        #Visualization
+        #if batch_idx == 0:
+        #    scene = point_scene(batch['points'], nms_pred, batch['target'], name=f'e{self.current_epoch}')
+        #    self.logger.experiment[0].log(scene, commit=False)
 
     def validation_epoch_end(self, outputs):
         easy, moderate, hard = compute_map(self.valid_dataset.hf,
@@ -80,8 +90,16 @@ class LitModel(pl.LightningModule):
         self.log('h_map', hard, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
-        frame, x = batch['frame'], batch['input'].float()
+        frame, x = batch['frame'], batch['input']
+        anchor = batch['anchor'] if 'anchor' in batch else None
         pred = self(x)
+
+        if self.config['data']['use_ccs']:
+            pred['box'][:, 6] += anchor[:, 6]
+            pred['box'] = canonical2global(pred['box'], anchor)
+        if self.config['loss']['use_dir_cls']:
+            pred['box'] = modify_ry(pred)
+            
         nms_pred, nms_score = generate_final_predictions(pred['box'], pred['class'], config['eval'])
         save_detections(os.path.join(self.output_dir, 'test'), frame, nms_pred, nms_score)
 
@@ -126,65 +144,62 @@ class LitModel(pl.LightningModule):
                           num_workers=os.cpu_count(),
                           collate_fn=self.test_dataset.collate_batch)
 
-def train(config, run_name, s3_log_path):
-    with open('aws_configs/group_id.txt', 'r') as fh:
-        GROUP_ID = int(fh.read())
+def train(config, run_name):
+    #with open('aws_configs/group_id.txt', 'r') as fh:
+    #    GROUP_ID = int(fh.read())
 
-    wandb_logger = WandbLogger(
-        name=run_name,
-        project='DLAD-Ex3',
-        save_dir=os.path.join(config["trainer"]["default_root_dir"])
-    )
+    #wandb_logger = WandbLogger(
+    #    name=run_name,
+    #    project='DLAD-Ex3',
+    #    save_dir=os.path.join(config["trainer"]["default_root_dir"], 'wandb')
+    #)
     tb_s3_logger = TensorBoardLogger(
         name="tb",
         version="",
-        save_dir=s3_log_path,
+        save_dir=os.path.join(config["trainer"]["default_root_dir"], 'tensorboard'),
     )
 
     checkpoint_local_callback = ModelCheckpoint(
         dirpath=os.path.join(config["trainer"]["default_root_dir"], 'checkpoints'),
     )
-    checkpoint_s3_callback = ModelCheckpoint(
-        dirpath=s3_log_path,
-        verbose=True,
-    )
+    #checkpoint_s3_callback = ModelCheckpoint(
+    #    dirpath=s3_log_path,
+    #    verbose=True,
+    #)
 
     # Log AWS instance information to wandb
-    ec2_hostname = requests.get('http://169.254.169.254/latest/meta-data/public-hostname').text
-    ec2_meta = {
-        "EC2_Hostname": ec2_hostname,
-        "EC2_Instance_ID": requests.get('http://169.254.169.254/latest/meta-data/instance-id').text,
-        "EC2_SSH": build_ssh_cmd(ec2_hostname),
-        "EC2_SSH_Tmux": f"{build_ssh_cmd(ec2_hostname)} -t tmux attach-session -t dlad",
-        "EC2_Rsync": build_rsync_cmd(ec2_hostname),
-        "S3_Path": s3_log_path,
-        "S3_Link": f"https://s3.console.aws.amazon.com/s3/buckets/{S3_BUCKET_NAME}?region=us-east-2&prefix={run_name}/",
-        "Group_Id": GROUP_ID
-    }
-    wandb_logger.log_hyperparams({**ec2_meta, **config})
-    tb_s3_logger.log_hyperparams({**ec2_meta, **config})
+    #ec2_hostname = requests.get('http://169.254.169.254/latest/meta-data/public-hostname').text
+    #ec2_meta = {
+        #"S3_Path": s3_log_path,
+        #"S3_Link": f"https://s3.console.aws.amazon.com/s3/buckets/{S3_BUCKET_NAME}?region=us-east-2&prefix={run_name}/",
+    #    "Group_Id": GROUP_ID
+    #}
+    #wandb_logger.log_hyperparams({**ec2_meta, **config})
+    #tb_s3_logger.log_hyperparams({**ec2_meta, **config})
 
     # Setup training framework
-    if config["trainer"]["resume_from_checkpoint"] is not None and "s3://" in config["trainer"]["resume_from_checkpoint"]:
-        s3 = boto3.resource('s3')
+    if config["trainer"]["resume_from_checkpoint"] is not None : #and "s3://" in config["trainer"]["resume_from_checkpoint"]:
+        #s3 = boto3.resource('s3')
         _, _, resume_bucket_name, resume_bucket_local_path = config["trainer"]["resume_from_checkpoint"].split('/', 3)
-        resume_bucket = s3.Bucket(resume_bucket_name)
-        checkpoints = list(resume_bucket.objects.filter(Prefix=resume_bucket_local_path))
+        #resume_bucket = s3.Bucket(resume_bucket_name)
+        #checkpoints = list(resume_bucket.objects.filter(Prefix=resume_bucket_local_path))
+
+        checkpoints = os.listdir(config["trainer"]["resume_from_checkpoint"])
         checkpoints = [c for c in checkpoints if c.key.endswith(".ckpt")]
         if len(checkpoints) != 1:
             print("Your s3 path specification did not match a single checkpoint. Please be more specific:")
             for c in checkpoints:
                 print(f"s3://{c.bucket_name}/{c.key}")
-            exit()
-        else:
-            config["trainer"]["resume_from_checkpoint"] = f"s3://{checkpoints[0].bucket_name}/{checkpoints[0].key}"
-            print(f'Resume from checkpoint S3 {config["trainer"]["resume_from_checkpoint"]}')
+#            exit()
+#        else:
+#            config["trainer"]["resume_from_checkpoint"] = f"s3://{checkpoints[0].bucket_name}/{checkpoints[0].key}"
+#            print(f'Resume from checkpoint S3 {config["trainer"]["resume_from_checkpoint"]}')
 
     print("Start training", run_name)
 
     trainer = pl.Trainer(
-        logger=[wandb_logger, tb_s3_logger],
-        callbacks=[checkpoint_local_callback, checkpoint_s3_callback],
+        logger=[tb_s3_logger],
+        callbacks=[checkpoint_local_callback],
         gpus=-1 if torch.cuda.is_available() else None,
         accelerator='ddp' if torch.cuda.is_available() else None,
         **config['trainer']
@@ -193,23 +208,22 @@ def train(config, run_name, s3_log_path):
     trainer.fit(litModel)
     trainer.test(litModel)
 
-    ret_code = os.system(f"aws s3 cp {litModel.submission_file} {s3_log_path}")
-    assert ret_code == 0
-    wandb.finish()
+    #ret_code = os.system(f"aws s3 cp {litModel.submission_file} {s3_log_path}")
+    #assert ret_code == 0
+    #wandb.finish()
 
-def get_newest_ckpt(s3_path):
-    s3 = boto3.resource('s3')
-    _, _, resume_bucket_name, resume_bucket_local_path = s3_path.split('/', 3)
-    resume_bucket = s3.Bucket(resume_bucket_name)
-    checkpoints = list(
-        resume_bucket.objects.filter(Prefix=resume_bucket_local_path))
+def get_newest_ckpt(config):
+    #s3 = boto3.resource('s3')
+    #_, _, resume_bucket_name, resume_bucket_local_path = s3_path.split('/', 3)
+    #resume_bucket = s3.Bucket(resume_bucket_name)
+    checkpoints = os.listdir(config["trainer"]["resume_from_checkpoint"])
     checkpoints = [c for c in checkpoints if c.key.endswith(".ckpt")]
     if len(checkpoints) == 0:
         return None
     else:
         checkpoints = sorted(checkpoints, key=lambda x: x.last_modified, reverse=True)
         print(checkpoints)
-        return f"s3://{checkpoints[0].bucket_name}/{checkpoints[0].key}"
+        return os.path.join(config["trainer"]["resume_from_checkpoint"], checkpoints[0])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
@@ -221,7 +235,7 @@ if __name__ == '__main__':
         with open('instance_state.txt', 'r') as fh:
             states = fh.readlines()
         for s in reversed(states):
-            last_resume_ckpt = get_newest_ckpt(s.replace('\n',''))
+            last_resume_ckpt = get_newest_ckpt(config)
             if last_resume_ckpt is not None:
                 config["trainer"]['resume_from_checkpoint'] = last_resume_ckpt
                 print(f'Resume from {last_resume_ckpt}.')
@@ -229,14 +243,14 @@ if __name__ == '__main__':
             else:
                 print(f'There is no checkpoint for {s}.')
 
-    with open('aws_configs/default_s3_bucket.txt', 'r') as fh:
-        S3_BUCKET_NAME = fh.read()
-    with open('aws_configs/group_id.txt', 'r') as fh:
-        GROUP_ID = int(fh.read())
+    #with open('aws_configs/default_s3_bucket.txt', 'r') as fh:
+     #   S3_BUCKET_NAME = fh.read()
+    #with open('aws_configs/group_id.txt', 'r') as fh:
+     #   GROUP_ID = int(fh.read())
     timestamp = datetime.now().strftime('%m%d-%H%M')
-    run_name = f'G{GROUP_ID}_{timestamp}_{config["name"]}_{str(uuid.uuid4())[:5]}'
-    s3_log_path = f"s3://{S3_BUCKET_NAME}/{run_name}/"
-    with open('instance_state.txt', 'a') as fh:
-        fh.write(f'{s3_log_path}\n')
-    train(config, run_name, s3_log_path)
-    os.remove('instance_state.txt')
+    run_name = f'G{28}_{timestamp}_{config["name"]}_{str(uuid.uuid4())[:5]}'
+    #s3_log_path = f"s3://{S3_BUCKET_NAME}/{run_name}/"
+    #with open('instance_state.txt', 'a') as fh:
+    #    fh.write(f'{s3_log_path}\n')
+    train(config, run_name)
+   # os.remove('instance_state.txt')

@@ -11,6 +11,7 @@ import h5py
 from utils.task2 import roi_pool
 from utils.task3 import sample_proposals
 from utils.voxel import voxelization
+from utils.ccs import rotate_points_along_y, global2canonical
 
 class DatasetLoader(Dataset):
     def __init__(self, config, split):
@@ -41,18 +42,23 @@ class DatasetLoader(Dataset):
         valid_pred, pooled_xyz, pooled_feat = roi_pool(pred=self.get_data(idx, 'detections'),
                                                        xyz=points,
                                                        feat=feat,
-                                                       config=self.config,
-                                                       canonical=self.config['use_ccs'])
+                                                       config=self.config)
+
+        if self.config['use_ccs']:
+            pooled_xyz = global2canonical(pooled_xyz, valid_pred)
 
         if self.split == 'test':
             if self.config['use_voxel']:
-                #voxels = voxelization(proposals=valid_pred,
-                #                    xyzs=pooled_xyz,
-                #                    feats=pooled_feat,
-                #                    config=self.config)
-                return {'frame': frame, 'input': {'proposal':valid_pred, 'xyz_feat': np.concatenate((pooled_xyz, pooled_feat),-1)}}
-            else:
-                return {'frame': frame, 'input': np.concatenate((pooled_xyz, pooled_feat),-1)}
+                voxels = voxelization(proposals=valid_pred,
+                                    xyzs=pooled_xyz,
+                                    feats=pooled_feat,
+                                    config=self.config)
+            sampled_frame = {'frame': frame,
+                    'input': voxels if self.config['use_voxel'] else np.concatenate((pooled_xyz, pooled_feat),-1),
+                    }
+            if self.config['use_ccs']:
+                sampled_frame.update({'anchor': valid_pred})
+            return sampled_frame
 
         target = self.get_data(idx, 'target')
         assinged_target, xyz, feat, iou, pred = sample_proposals(pred=valid_pred,
@@ -62,18 +68,27 @@ class DatasetLoader(Dataset):
                                                                  config=self.config,
                                                                  train=self.split=='train')
 
-        #if self.config['use_voxel']:
-            #voxels = voxelization(proposals=pred,
-            #                    xyzs=xyz,
-            #                    feats=feat,
-            #                    config=self.config)
+        if self.config['use_ccs']:
+            assinged_target = global2canonical(assinged_target.reshape(-1, 1, assinged_target.shape[1]),
+                                               pred).squeeze(1)
+            assinged_target[:, 6] -= pred[:, 6]
+
+        if self.config['use_voxel']:
+            voxels = voxelization(proposals=pred,
+                                xyzs=xyz,
+                                feats=feat,
+                                config=self.config)
 
         sampled_frame = {
             # 'input': np.concatenate((xyz, feat),-1),
-            'input': {'proposal':pred, 'xyz_feat': np.concatenate((xyz, feat),-1)} if self.config['use_voxel'] else np.concatenate((xyz, feat),-1),
+            'input': voxels if self.config['use_voxel'] else np.concatenate((xyz, feat),-1),
             'assinged_target': assinged_target,
-            'iou': iou
+            'iou': iou,
         }
+
+        if self.config['use_ccs']:
+            sampled_frame.update({'anchor': pred})
+
         if self.split == 'train':
             return sampled_frame
         
@@ -139,5 +154,5 @@ class DatasetLoader(Dataset):
                 ans_dict[key] = np.concatenate((ans_dict[key], batch[b][key]),0,dtype=np.float32)
         for key in ans_dict.keys():
             if key not in ['target', 'points', 'frame']:
-                ans_dict[key] = torch.from_numpy(ans_dict[key])
+                ans_dict[key] = torch.from_numpy(ans_dict[key]).float()
         return ans_dict

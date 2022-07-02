@@ -13,9 +13,9 @@ class Model(nn.Module):
         self.__dict__.update(config)
 
         # Encoder
-        if self.encoder == 'original':
+        if self.use_voxel is False:
             channel_in = self.num_point_features
-            # if use more features (intensity), input channel size should be modified
+             #if use more features (intensity), input channel size should be modified
             self.mlps[0][0] += channel_in - 131
             self.set_abstraction = nn.ModuleList()
             for k in range(len(self.npoint)):
@@ -29,16 +29,16 @@ class Model(nn.Module):
                             mlp=self.mlps[k],
                             use_xyz=True,
                             bn=False
-                        )
+                       )
                     )
                 channel_in = mlps[-1]
         else:
-            if self.encoder == 'svfe':
-                self.SVFE = SVFE(config)
-            elif self.encoder == 'mvfe':
-                self.SVFE = MeanVFE(config)
+            # if self.encoder == 'svfe':
+            #     self.SVFE = SVFE(config)
+            # elif self.encoder == 'mvfe':
+            #     self.SVFE = MeanVFE(config)
 
-            self.voxelization_layer = Voxelization(config)
+            # self.voxelization_layer = Voxelization(config)
             channel_in = self.max_num_voxels * self.num_point_features
 
             # Middle layer
@@ -97,7 +97,7 @@ class Model(nn.Module):
             self.dir_layers = nn.Sequential(*dir_layers)
 
     def forward(self, x):
-        if self.encoder == 'original':
+        if self.use_voxel is False:
             xyz = x[..., 0:3].contiguous()                      # (B,N,3)    
             feat = x[..., 3:].transpose(1, 2).contiguous()      # (B,C,N)
 
@@ -105,11 +105,10 @@ class Model(nn.Module):
                 xyz, feat = layer(xyz, feat)
 
         else:
-            x = x.contiguous()     
-            x = self.voxelization_layer(x) # (B,216,35,C)
+            x.contiguous()
 
-            feat = self.SVFE(x)
-            feat = self.mid_layers(feat)
+            # feat = self.SVFE(x)
+            feat = self.mid_layers(x)
             
         pred_class = self.cls_layers(feat).squeeze(dim=-1)  # (B,1)
         pred_box = self.det_layers(feat).squeeze(dim=-1)    # (B,7)

@@ -10,3 +10,8 @@ data/
 report/
 tests/test*
 code*
+exp*/
+tests/
+__pycache__/
+aws*
+lsf*

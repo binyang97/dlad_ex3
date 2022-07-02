@@ -5,7 +5,7 @@
 name: 'default'
 
 data:
-    root_dir: '/home/ubuntu/dataset' #'../data' 
+    root_dir: '/cluster/project/infk/courses/252-0579-00L/group20/dataset' #'../data'
     batch_size: 4
     delta: 1.0                  # Task 2a: Extension of the bounding boxes
     max_points: 512             # Task 2b: Maximum points per pooled region
@@ -22,8 +22,8 @@ data:
     max_num_points_per_voxel: 35
     max_num_voxels: 64 # voxel_grid_size^3
     voxel_grid_size: 4
-    use_ccs: False
-    use_voxel: True # in accordance with encoder
+    use_ccs: True
+    use_voxel: False # in accordance with encoder
 
 
 model:
@@ -44,8 +44,9 @@ model:
     max_num_points_per_voxel: 35 # same as data
     max_num_voxels: 64 # same as data
     voxel_grid_size: 4
-    encoder: 'mvfe' # ['mvfe', 'svfe', 'original']
-    use_dir_cls: False # same as loss
+    encoder:  # ['mvfe', 'svfe', 'original']
+    use_voxel: Flase
+    use_dir_cls: True # same as loss
 
 optimizer:
     lr: 0.001
@@ -59,22 +60,22 @@ loss:
     positive_reg_lb: 0.55
     positive_cls_lb: 0.6
     negative_cls_ub: 0.45
-    use_corner_loss: False
-    use_dir_cls: False # same as model
+    use_corner_loss: True
+    use_dir_cls: True # same as model
     huber_delta: 1
 
 eval:
-    output_dir: '/home/ubuntu/results/'
+    output_dir: '/cluster/home/biyang/dlad_ex3/exp3/evaluation_point_local'
     t_rpn_recall: 0.5           # Task 1: RPN recall threshold
     t_nms: 0.1                  # Task 5: NMS threshold
     t_score: 0.3                # Task 6: Refinement network score threshold
 
 trainer:
-    default_root_dir: '/home/ubuntu/results/'
+    default_root_dir: '/cluster/home/biyang/dlad_ex3/exp3/exp_point_local'
     max_epochs: 35
     check_val_every_n_epoch: 1
     resume_from_checkpoint: 
     num_sanity_val_steps: 0
     # Uncomment the following options if you want to try out framework changes without training too long
-    limit_train_batches: 10
-    # log_every_n_steps: 5
+    limit_train_batches: 2000
+    #log_every_n_steps: 5

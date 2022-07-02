@@ -59,12 +59,12 @@ def box2corners(label):
 
     return corners
 
-def huber_loss(error, delta):
-    abs_error = torch.abs(error)
-    quadratic = torch.minimum(abs_error, delta)
-    linear = (abs_error - quadratic)
-    losses = 0.5 * quadratic**2 + delta * linear
-    return losses
+# def huber_loss(error, delta):
+#     abs_error = torch.abs(error)
+#     quadratic = torch.minimum(abs_error, delta)
+#     linear = (abs_error - quadratic)
+#     losses = 0.5 * quadratic**2 + delta * linear
+#     return losses
 
 class WeightedCrossEntropyLoss(nn.Module):
     """
@@ -102,7 +102,7 @@ class RegressionLoss(nn.Module):
         #self.huber_loss = nn.HuberLoss(reduction='mean', delta = self.config['huber_delta'])
         self.wce = WeightedCrossEntropyLoss()
 
-    def forward(self, pred, target, iou):
+    def forward(self, pred, target, iou, anchor=None):
         '''
         Task 4.a
         We do not want to define the regression loss over the entire input space.
@@ -136,7 +136,7 @@ class RegressionLoss(nn.Module):
 
             # Calculate direction classification loss
             pred_dir = pred['dir']
-            dir_targets = get_direction_target(target)
+            dir_targets = get_direction_target(target, anchor)
             weights = mask.type_as(pred_dir)
             weights /= torch.clamp(weights.sum(-1, keepdim=True), min=1.0)
             #self.dir_loss_func = nn.CrossEntropyLoss(weight = weights)
@@ -216,9 +216,10 @@ def add_sin_difference(boxes1, boxes2):
                         dim=-1)
     return boxes1, boxes2
 
-def get_direction_target(reg_targets, dir_offset=0, dir_limit_offset=0.0, num_bins=2, one_hot=True):
+def get_direction_target(reg_targets, anchors=None, dir_offset=0, dir_limit_offset=0.0, num_bins=2, one_hot=True):
     """Encode direction to 0 ~ num_bins-1.
     Args:
+        anchors (torch.Tensor): Bbox proposals from stage 1.
         reg_targets (torch.Tensor): Bbox regression targets.
         dir_offset (int, optional): Direction offset. Default to 0.
         dir_limit_offset (float, optional): Offset to set the direction
@@ -230,7 +231,10 @@ def get_direction_target(reg_targets, dir_offset=0, dir_limit_offset=0.0, num_bi
     Returns:
         torch.Tensor: Encoded direction targets.
     """
-    rot_gt = reg_targets[..., 6]
+    if anchors is not None:
+        rot_gt = reg_targets[:, 6] + anchors[:, 6]
+    else:
+        rot_gt = reg_targets[:, 6]
     offset_rot = limit_period(rot_gt - dir_offset, dir_limit_offset, 2 * np.pi)
     dir_cls_targets = torch.floor(offset_rot / (2 * np.pi / num_bins)).long()
     dir_cls_targets = torch.clamp(dir_cls_targets, min=0, max=num_bins - 1)
