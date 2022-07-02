@@ -71,6 +71,7 @@ class DatasetLoader(Dataset):
         if self.config['use_ccs']:
             assinged_target = global2canonical(assinged_target.reshape(-1, 1, assinged_target.shape[1]),
                                                pred).squeeze(1)
+            assinged_target[:, 6] -= pred[:, 6]
 
         if self.config['use_voxel']:
             voxels = voxelization(proposals=pred,

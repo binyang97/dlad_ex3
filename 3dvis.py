@@ -13,6 +13,7 @@ from dataset import DatasetLoader
 from utils.task1 import label2corners
 from utils.task2 import roi_pool, enlarge_box
 from utils.task3 import sample_proposals
+from utils.ccs import global2canonical, canonical2global
 
 class Visualizer():
     def __init__(self):
@@ -99,8 +100,9 @@ def test(label):
                     [ l/2,  0, -w/2]]
 
         corner_3d = np.array(corner_3d)
-        
         corners.append(corner_3d)
+
+    corners = np.array(corners)
 
     return corners
 
@@ -119,40 +121,49 @@ if __name__ == '__main__':
 									feat=ds.get_data(frame_id, 'features'),
 									config=config['data'])
 
+    # pooled_xyz = global2canonical(pooled_xyz, valid_pred)
+
     box_ind =np.arange(0,5) 
 
     # Visulization for task 2
-    points = pooled_xyz[box_ind].reshape(-1, pooled_xyz.shape[-1])
-    visualizer.update(points)
+    # points = pooled_xyz[box_ind].reshape(-1, pooled_xyz.shape[-1])
+    # visualizer.update(points)
 
-    valid_corners_org = label2corners(valid_pred)
-    valid_corners = label2corners(enlarge_box(valid_pred,config['data']['delta']))
+    # valid_corners_org = test(valid_pred)
+    # valid_corners = test(enlarge_box(valid_pred,config['data']['delta']))
 
     # visualizer.update_boxes(valid_corners[box_ind])
     # visualizer.update_boxes(valid_corners_org[box_ind])
-    visualizer.update_boxes(np.vstack([valid_corners[box_ind],valid_corners_org[box_ind]]))
+    # visualizer.update_boxes(np.vstack([valid_corners[box_ind],valid_corners_org[box_ind]]))
     '''
     Task 2: Compute all bounding box corners from given
     annotations. You can visualize the bounding boxes using
     visualizer.update_boxes(corners)
     '''
     # Visulization for task 3
-    # targets, xyz, feat, iou = sample_proposals(pred=valid_pred,
-    #                                             target=ds.get_data(frame_id, 'target'),
-    #                                             xyz=pooled_xyz,
-    #                                             feat=pooled_feat,
-    #                                             config=config['data'],
-    #                                             train=True,
-    #                                             )
+    targets, xyz, feat, iou, pred = sample_proposals(pred=valid_pred,
+                                                target=ds.get_data(frame_id, 'target'),
+                                                xyz=pooled_xyz,
+                                                feat=pooled_feat,
+                                                config=config['data'],
+                                                train=True,
+                                                )
 
-    # points = xyz.reshape(-1, xyz.shape[-1])
-    # visualizer.update(points)
+    points = xyz[box_ind].reshape(-1, xyz.shape[-1])
+    visualizer.update(points)
 
-    # valid_corners = label2corners(valid_pred)
-    # visualizer.update_boxes(valid_corners)
+    # targets = global2canonical(targets.reshape(-1, 1, targets.shape[1]), pred).squeeze(1)
+    # targets[:, 6] -= pred[:, 6]
 
-    # print(valid_corners.shape)
-    # print(xyz.shape)
+    # targets[:, 6] += pred[:, 6]
+    # targets = canonical2global(torch.from_numpy(targets), pred).numpy()
+
+    valid_corners = label2corners(targets[box_ind].reshape(-1,7))
+    visualizer.update_boxes(valid_corners)
+
+    print(valid_corners.shape)
+    print(xyz.shape)
+    print(targets[box_ind])
 
 
     vispy.app.run()

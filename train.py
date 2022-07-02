@@ -68,6 +68,7 @@ class LitModel(pl.LightningModule):
         self.log('valid_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
 
         if self.config['data']['use_ccs']:
+            pred['box'][:, 6] += anchor[:, 6]
             pred['box'] = canonical2global(pred['box'], anchor)
         if self.config['loss']['use_dir_cls']:
             pred['box'] = modify_ry(pred)
@@ -95,6 +96,7 @@ class LitModel(pl.LightningModule):
         pred = self(x)
 
         if self.config['data']['use_ccs']:
+            pred['box'][:, 6] += anchor[:, 6]
             pred['box'] = canonical2global(pred['box'], anchor)
         if self.config['loss']['use_dir_cls']:
             pred['box'] = modify_ry(pred)
