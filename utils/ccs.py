@@ -54,7 +54,7 @@ def canonical2global(boxes, anchors):
     Returns:
     """
     ry = anchors[:, 6].reshape(-1)
-    xyz = anchors[:, 0:3].reshape(-1, 1, 3)
+    xyz = anchors[:, 0:3].reshape(-1, 3)
     xyz, _ = check_numpy_to_torch(xyz)
 
     boxes = rotate_points_along_y(boxes.unsqueeze(dim=1), ry).squeeze(dim=1)
