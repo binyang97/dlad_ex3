@@ -44,7 +44,8 @@ model:
     max_num_points_per_voxel: 35 # same as data
     max_num_voxels: 64 # same as data
     voxel_grid_size: 4
-    encoder: 'original' # ['mvfe', 'svfe', 'original']
+    encoder:  # ['mvfe', 'svfe', 'original']
+    use_voxel: True 
     use_dir_cls: True # same as loss
 
 optimizer:

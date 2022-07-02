@@ -13,7 +13,7 @@ class Model(nn.Module):
         self.__dict__.update(config)
 
         # Encoder
-        if self.encoder == 'original':
+        if self.use_voxel is False:
             channel_in = self.num_point_features
             # if use more features (intensity), input channel size should be modified
             self.mlps[0][0] += channel_in - 131
