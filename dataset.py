@@ -84,9 +84,9 @@ class DatasetLoader(Dataset):
             'assinged_target': assinged_target,
             'iou': iou,
         }
-        
+
         if self.config['use_ccs']:
-            sampled_frame.update({'anchor': valid_pred})
+            sampled_frame.update({'anchor': pred})
 
         if self.split == 'train':
             return sampled_frame

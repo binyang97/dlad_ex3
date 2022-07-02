@@ -232,9 +232,9 @@ def get_direction_target(reg_targets, anchors=None, dir_offset=0, dir_limit_offs
         torch.Tensor: Encoded direction targets.
     """
     if anchors is not None:
-        rot_gt = reg_targets[..., 6] + anchors[..., 6]
+        rot_gt = reg_targets[:, 6] + anchors[:, 6]
     else:
-        rot_gt = reg_targets[..., 6]
+        rot_gt = reg_targets[:, 6]
     offset_rot = limit_period(rot_gt - dir_offset, dir_limit_offset, 2 * np.pi)
     dir_cls_targets = torch.floor(offset_rot / (2 * np.pi / num_bins)).long()
     dir_cls_targets = torch.clamp(dir_cls_targets, min=0, max=num_bins - 1)

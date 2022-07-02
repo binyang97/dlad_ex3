@@ -79,7 +79,7 @@ def voxelization(proposals, xyzs, feats, config):
                 voxel_feature[voxel_idx, count[voxel_idx]] = np.hstack((feat[point_idx], xyz_global[point_idx]))
                 count[voxel_idx] += 1
         
-
+        voxel_feature = np.squeeze(np.sum(voxel_feature, axis = 1)) #(Voxel, C)
         for i, c in enumerate(count):
             if c == 0:
                 pass
@@ -87,6 +87,7 @@ def voxelization(proposals, xyzs, feats, config):
                 voxel_feature[i] = voxel_feature[i] / c
 
         #voxel_coords.append(voxel_coord)
+        voxel_feature = np.array(voxel_feature).flatten()
         voxel_features.append(voxel_feature)
 
     return np.array(voxel_features)
